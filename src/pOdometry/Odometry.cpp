@@ -17,6 +17,20 @@ using namespace std;
 
 Odometry::Odometry()
 {
+  m_first_reading = true;
+  m_current_x = 0.;
+  m_current_y = 0.;
+  m_previous_x = 0.;
+  m_previous_y = 0.;
+  m_total_distance = 0.;
+
+
+  // my variables
+  m_incoming_x = 0.;
+  m_incoming_y = 0.;
+  m_new_x = false;
+  m_new_y = false;
+  m_tolerance = 0.1; // Minimum distance to consider a new reading
 }
 
 //---------------------------------------------------------
@@ -48,14 +62,26 @@ bool Odometry::OnNewMail(MOOSMSG_LIST &NewMail)
     bool   mstr  = msg.IsString();
 #endif
 
-     if(key == "FOO") 
-       cout << "great!";
-
-     else if(key != "APPCAST_REQ") // handled by AppCastingMOOSApp
-       reportRunWarning("Unhandled Mail: " + key);
-   }
+    // Check if the mail is for NAV_X
+    if(key == "NAV_X") {
+      if(msg.IsDouble()) {
+          m_incoming_x = msg.GetDouble();
+          m_new_x = true;
+        }
+      }
+    // Check if the mail is for NAV_Y
+    else if(key == "NAV_Y") {
+      if(msg.IsDouble()) {
+          m_incoming_y = msg.GetDouble();
+          m_new_y = true;
+        }
+      }
+    else if(key != "APPCAST_REQ"){ // handled by AppCastingMOOSApp
+      reportRunWarning("Unhandled Mail: " + key);
+    }
+  }
 	
-   return(true);
+  return(true);
 }
 
 //---------------------------------------------------------
@@ -75,6 +101,40 @@ bool Odometry::Iterate()
 {
   AppCastingMOOSApp::Iterate();
   // Do your thing here!
+
+  // Initialize on the very first valid X and Y reading
+  if (m_first_reading && m_new_x && m_new_y) {
+    m_previous_x = m_incoming_x;
+    m_previous_y = m_incoming_y;
+    
+    m_new_x = false;
+    m_new_y = false;
+    m_first_reading = false;
+  }
+  // For all subsequent readings
+  else if (!m_first_reading && m_new_x && m_new_y) {
+    
+    // Calculate the distance moved since the LAST reading
+    // Same as  sqrt((x2 - x1)^2 + (y2 - y1)^2)
+    double dist_delta = std::hypot(m_incoming_x - m_previous_x, m_incoming_y - m_previous_y);
+
+    // Only update and publish if the movement exceeds the noise tolerance
+    if (dist_delta > m_tolerance) {
+      m_total_distance += dist_delta;
+
+      // Update previous coordinates for the next iteration
+      m_previous_x = m_incoming_x;
+      m_previous_y = m_incoming_y;
+
+      // Publish the total distance to the MOOSDB
+      Notify("ODOMETRY_DIST", m_total_distance);
+    }
+
+    // Reset flags
+    m_new_x = false;
+    m_new_y = false;
+  }
+
   AppCastingMOOSApp::PostReport();
   return(true);
 }
@@ -123,6 +183,8 @@ void Odometry::registerVariables()
 {
   AppCastingMOOSApp::RegisterVariables();
   // Register("FOOBAR", 0);
+  Register("NAV_X", 0);
+  Register("NAV_Y", 0);
 }
 
 
