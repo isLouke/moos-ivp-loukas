@@ -102,6 +102,7 @@ bool Odometry::Iterate() {
     m_new_x = false;
     m_new_y = false;
     m_first_reading = false;
+    Notify("ODOMETRY_DIST", 0.0); // Publish initial distance (0.0)
   }
   // For all subsequent readings
   else if (!m_first_reading && m_new_x && m_new_y) {
