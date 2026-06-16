@@ -1,7 +1,7 @@
 /************************************************************/
-/*    NAME: George Loukas                                              */
+/*    NAME: George Loukas                                   */
 /*    ORGN: MIT, Cambridge MA                               */
-/*    FILE: Odometry.cpp                                        */
+/*    FILE: Odometry.cpp                                    */
 /*    DATE: December 29th, 1963                             */
 /************************************************************/
 
