@@ -31,6 +31,7 @@ ProcessConfig = ANTLER
   Run = uProcessWatch	@ NewConsole = false
   Run = pNodeReporter	@ NewConsole = false
   Run = pRealm	      @ NewConsole = false
+  Run = uTimerScript  @ NewConsole = false
 }
 
 //------------------------------------------
@@ -216,3 +217,16 @@ ProcessConfig = pNodeReporter
   platform_length = 4
 }
 
+//------------------------------------------
+ // uTimerScript config block
+ ProcessConfig = uTimerScript
+ {
+   AppTick   = 4
+   CommsTick = 4
+
+   condition   = DEPLOY = true 
+   event       = var=REGION, val="west", time=90 
+   event       = var=REGION, val="east", time=180  
+   reset_max   = nolimit  
+   reset_time  = all-posted
+ }

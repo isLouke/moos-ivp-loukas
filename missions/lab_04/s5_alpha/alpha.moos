@@ -31,6 +31,7 @@ ProcessConfig = ANTLER
   Run = uProcessWatch	@ NewConsole = false
   Run = pNodeReporter	@ NewConsole = false
   Run = pRealm	      @ NewConsole = false
+  Run = iSay          @ NewConsole = false
 }
 
 //------------------------------------------
@@ -194,8 +195,8 @@ ProcessConfig = pMarineViewer
   button_one = DEPLOY # DEPLOY=true
   button_one = MOOS_MANUAL_OVERRIDE=false # RETURN=false
   button_two = RETURN # RETURN=true
-  button_three = WEST  #  REGION=west
-  button_four  = EAST  #  REGION=east
+  button_three = SLOWER # WPT_UPDATE=speed=1.5
+  button_four = FASTER # WPT_UPDATE=speed=3.5
 
   action  = MENU_KEY=deploy # DEPLOY = true # RETURN = false
   action+ = MENU_KEY=deploy # MOOS_MANUAL_OVERRIDE=false
@@ -215,4 +216,16 @@ ProcessConfig = pNodeReporter
   platform_color  = yellow
   platform_length = 4
 }
+
+//------------------------------------------                                    
+ProcessConfig = iSay
+{
+  AppTick   = 4
+  CommsTick = 4
+
+  min_utter_interval = 1
+  interval_policy    = from_end
+  volume             = soft
+}
+
 
