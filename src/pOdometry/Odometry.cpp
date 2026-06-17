@@ -26,9 +26,11 @@ Odometry::Odometry() {
   // my variables
   m_incoming_x = 0.;
   m_incoming_y = 0.;
+  m_incoming_depth = 0.;
   m_new_x = false;
   m_new_y = false;
   m_tolerance = 0.1; // Minimum distance to consider a new reading
+  m_dist_at_depth = 0.;
 }
 
 //---------------------------------------------------------
@@ -70,6 +72,10 @@ bool Odometry::OnNewMail(MOOSMSG_LIST &NewMail) {
         m_incoming_y = msg.GetDouble();
         m_new_y = true;
       }
+    } else if (key == "NAV_DEPTH") {
+      if (msg.IsDouble()) {
+        m_incoming_depth = msg.GetDouble();
+      }
     } else if (key != "APPCAST_REQ") { // handled by AppCastingMOOSApp
       reportRunWarning("Unhandled Mail: " + key);
     }
@@ -102,7 +108,9 @@ bool Odometry::Iterate() {
     m_new_x = false;
     m_new_y = false;
     m_first_reading = false;
-    Notify("ODOMETRY_DIST", 0.0); // Publish initial distance (0.0)
+    Notify("ODOMETRY_DIST", 0.0); // Publish initial distance
+    Notify("ODOMETRY_DIST_AT_DEPTH",
+           0.0); // Publish initial distance at depth
   }
   // For all subsequent readings
   else if (!m_first_reading && m_new_x && m_new_y) {
@@ -116,12 +124,17 @@ bool Odometry::Iterate() {
     if (dist_delta > m_tolerance) {
       m_total_distance += dist_delta;
 
+      if (m_incoming_depth > m_depth_thresh) {
+        m_dist_at_depth += dist_delta;
+      }
+
       // Update previous coordinates for the next iteration
       m_previous_x = m_incoming_x;
       m_previous_y = m_incoming_y;
 
       // Publish the total distance to the MOOSDB
       Notify("ODOMETRY_DIST", m_total_distance);
+      Notify("ODOMETRY_DIST_AT_DEPTH", m_dist_at_depth);
     }
 
     // Reset flags
@@ -155,6 +168,9 @@ bool Odometry::OnStartUp() {
     bool handled = false;
     if (param == "foo") {
       handled = true;
+    } else if (param == "depth_thresh") {
+      m_depth_thresh = stod(value);
+      handled = true;
     } else if (param == "bar") {
       handled = true;
     }
@@ -175,6 +191,7 @@ void Odometry::registerVariables() {
   // Register("FOOBAR", 0);
   Register("NAV_X", 0);
   Register("NAV_Y", 0);
+  Register("NAV_DEPTH", 0);
 }
 
 //------------------------------------------------------------
@@ -186,6 +203,6 @@ bool Odometry::buildReport() {
   m_msgs << "============================================" << endl;
 
   m_msgs << "Total Distance Traveled: " << m_total_distance << endl;
-
+  m_msgs << "Distance Traveled at Depth: " << m_dist_at_depth << endl;
   return (true);
 }
