@@ -59,7 +59,8 @@ nsplug meta_vehicle.bhv targ_$VNAME2.bhv -f VNAME=$VNAME2     \
 
 nsplug meta_shoreside.moos targ_shoreside.moos -f WARP=$TIME_WARP \
        VNAME="shoreside"  PSHARE_PORT="9200"                      \
-       VPORT="9000"       IP_ADDR="localhost"
+       VPORT="9000"       IP_ADDR="localhost"                     \
+       VNAMES="$VNAME1,$VNAME2"
         
 if [ ${JUST_MAKE} = "yes" ]; then
     echo "Files assembled; nothing launched; exiting per request."

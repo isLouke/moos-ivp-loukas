@@ -113,5 +113,5 @@ ProcessConfig = pPointAssign
   total_points = 100 // Pass the total points, so the app knows how many there are.
   assignment_mode = regional // alternating or regional
   median_x = 112
-  vname = henry, gilda, loukas, anti-claude
+  vname = $(VNAMES) // henry, gilda, loukas, anti-claude
 }
