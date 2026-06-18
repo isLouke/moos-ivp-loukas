@@ -28,6 +28,7 @@ protected: // Standard AppCastingMOOSApp function to overload
 
 protected:
   void registerVariables();
+  void postViewPoint(double x, double y, std::string label, std::string color);
 
 private: // Configuration variables
   int m_points_received;

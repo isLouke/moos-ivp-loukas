@@ -108,7 +108,9 @@ bool PointAssign::Iterate() {
     // Alternating Mode: Assign points to two vehicles in an alternating fashion
     for (int i = 0; i < m_xypoints.size(); i++) {
       string vehicle = (i % 2 == 0) ? vname[0] : vname[1];
+      string color = (i % 2 == 0) ? "yellow" : "red";
       Notify("VISIT_POINT_" + toupper(vehicle), m_xypoints[i].get_spec());
+      postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i), color);
     }
   }
 
@@ -117,8 +119,10 @@ bool PointAssign::Iterate() {
     for (int i = 0; i < m_xypoints.size(); i++) {
       if (m_xypoints[i].x() < median_x) {
         Notify("VISIT_POINT_" + toupper(vname[0]), m_xypoints[i].get_spec());
+        postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i), "yellow");
       } else {
         Notify("VISIT_POINT_" + toupper(vname[1]), m_xypoints[i].get_spec());
+        postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i), "red");
       }
     }
   }
@@ -197,6 +201,20 @@ bool PointAssign::OnStartUp() {
 void PointAssign::registerVariables() {
   AppCastingMOOSApp::RegisterVariables();
   Register("VISIT_POINT", 0);
+}
+
+//---------------------------------------------------------
+// Procedure: postViewPoint()
+
+void PointAssign::postViewPoint(double x, double y, string label, string color)
+{
+  XYPoint point(x, y);
+  point.set_label(label);
+  point.set_color("vertex", color);  // yellow is handy on dark screen 
+  point.set_param("vertex_size", "4");
+
+  string spec = point.get_spec();    // gets the string representation of a point
+  Notify("VIEW_POINT", spec);
 }
 
 //------------------------------------------------------------
