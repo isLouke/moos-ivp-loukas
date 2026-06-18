@@ -14,6 +14,7 @@ ADD_EXECUTABLE(pPointAssign ${SRC})
 TARGET_LINK_LIBRARIES(pPointAssign
    ${MOOS_LIBRARIES}
    apputil
+   geometry
    mbutil
    m
    pthread)

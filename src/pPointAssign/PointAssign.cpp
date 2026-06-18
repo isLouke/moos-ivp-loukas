@@ -5,38 +5,42 @@
 /*    DATE: December 29th, 1963                             */
 /************************************************************/
 
-#include <iterator>
-#include "MBUtils.h"
-#include "ACTable.h"
 #include "PointAssign.h"
+#include "ACTable.h"
+#include "MBUtils.h"
+#include <iterator>
 
 using namespace std;
 
 //---------------------------------------------------------
 // Constructor()
 
-PointAssign::PointAssign()
-{
+PointAssign::PointAssign() {
+  // I will save the received and through an warning if > 100
+  m_points_received = 0;
+  // Flags to indicate if i received the first and last point
+  m_first_point_flag = false;
+  m_last_point_flag = false;
+  m_result_sent = false;
+  median_x = 0;
 }
 
 //---------------------------------------------------------
 // Destructor
 
-PointAssign::~PointAssign()
-{
-}
+PointAssign::~PointAssign() {}
 
 //---------------------------------------------------------
 // Procedure: OnNewMail()
 
-bool PointAssign::OnNewMail(MOOSMSG_LIST &NewMail)
-{
+bool PointAssign::OnNewMail(MOOSMSG_LIST &NewMail) {
   AppCastingMOOSApp::OnNewMail(NewMail);
 
   MOOSMSG_LIST::iterator p;
-  for(p=NewMail.begin(); p!=NewMail.end(); p++) {
+  for (p = NewMail.begin(); p != NewMail.end(); p++) {
     CMOOSMsg &msg = *p;
-    string key    = msg.GetKey();
+    string key = msg.GetKey();
+    string sval  = msg.GetString(); 
 
 #if 0 // Keep these around just for template
     string comm  = msg.GetCommunity();
@@ -48,102 +52,172 @@ bool PointAssign::OnNewMail(MOOSMSG_LIST &NewMail)
     bool   mstr  = msg.IsString();
 #endif
 
-     if(key == "FOO") 
-       cout << "great!";
+    if (key == "VISIT_POINT") {
+      if (sval == "firstpoint")
+        m_first_point_flag = true;
+      else if (sval == "lastpoint") {
+        m_last_point_flag = true;
+        Notify("POINTS_RECEIVED", m_points_received);
+      } else {
 
-     else if(key != "APPCAST_REQ") // handled by AppCastingMOOSApp
-       reportRunWarning("Unhandled Mail: " + key);
-   }
-	
-   return(true);
+        // handle the incoming points here
+        XYPoint new_point = string2Point(sval);
+        m_xypoints.push_back(new_point);
+
+        // count the incoming points
+        m_points_received++;
+
+        if (m_points_received > m_points_expected) {
+          // This should be an error, but for now I will just report a warning
+          reportRunWarning(
+              "Received more points than expected for lab 07 (" + to_string(m_points_expected) + "): " +
+              to_string(m_points_received));
+        }
+      }
+    }
+
+    else if (key != "APPCAST_REQ") // handled by AppCastingMOOSApp
+      reportRunWarning("Unhandled Mail: " + key);
+  }
+
+  return (true);
 }
 
 //---------------------------------------------------------
 // Procedure: OnConnectToServer()
 
-bool PointAssign::OnConnectToServer()
-{
-   registerVariables();
-   return(true);
+bool PointAssign::OnConnectToServer() {
+  registerVariables();
+  return (true);
 }
 
 //---------------------------------------------------------
 // Procedure: Iterate()
 //            happens AppTick times per second
 
-bool PointAssign::Iterate()
-{
+bool PointAssign::Iterate() {
   AppCastingMOOSApp::Iterate();
-  // Do your thing here!
+
+  if (m_last_point_flag && !m_result_sent) {
+
+    for (size_t i = 0; i < vname.size(); i++) {
+      Notify("VISIT_POINT_" + toupper(vname[i]), "firstpoint");
+    }
+
+    if (m_alternating_mode) {
+    // Alternating Mode: Assign points to two vehicles in an alternating fashion
+    for (int i = 0; i < m_xypoints.size(); i++) {
+      string vehicle = (i % 2 == 0) ? vname[0] : vname[1];
+      Notify("VISIT_POINT_" + toupper(vehicle), m_xypoints[i].get_spec());
+    }
+  }
+
+  if (m_regional_mode) {
+    // Regional Mode: Assign points based on their x-coordinate
+    for (int i = 0; i < m_xypoints.size(); i++) {
+      if (m_xypoints[i].x() < median_x) {
+        Notify("VISIT_POINT_" + toupper(vname[0]), m_xypoints[i].get_spec());
+      } else {
+        Notify("VISIT_POINT_" + toupper(vname[1]), m_xypoints[i].get_spec());
+      }
+    }
+  }
+
+    for (size_t i = 0; i < vname.size(); i++) {
+      Notify("VISIT_POINT_" + toupper(vname[i]), "lastpoint");
+    }
+    
+    m_result_sent = true;
+  }
+
   AppCastingMOOSApp::PostReport();
-  return(true);
+  return (true);
 }
 
 //---------------------------------------------------------
 // Procedure: OnStartUp()
 //            happens before connection is open
 
-bool PointAssign::OnStartUp()
-{
+bool PointAssign::OnStartUp() {
   AppCastingMOOSApp::OnStartUp();
 
   STRING_LIST sParams;
   m_MissionReader.EnableVerbatimQuoting(false);
-  if(!m_MissionReader.GetConfiguration(GetAppName(), sParams))
+  if (!m_MissionReader.GetConfiguration(GetAppName(), sParams))
     reportConfigWarning("No config block found for " + GetAppName());
 
   STRING_LIST::iterator p;
-  for(p=sParams.begin(); p!=sParams.end(); p++) {
-    string orig  = *p;
-    string line  = *p;
+  for (p = sParams.begin(); p != sParams.end(); p++) {
+    string orig = *p;
+    string line = *p;
     string param = tolower(biteStringX(line, '='));
     string value = line;
 
     bool handled = false;
-    if(param == "foo") {
+    if (param == "foo") {
+      handled = true;
+    } else if (param == "total_points") {
+      m_points_expected = stod(value);
       handled = true;
     }
-    else if(param == "bar") {
+    else if (param == "assignment_mode") {
+      if (value == "alternating") {
+        m_alternating_mode = true;
+        m_regional_mode = false;
+      } else if (value == "regional") {
+        m_alternating_mode = false;
+        m_regional_mode = true;
+      } else {
+        reportConfigWarning("Invalid assignment_mode: " + value);
+      }
+      handled = true;
+    }
+    else if (param == "median_x") {
+      median_x = stod(value);
+      handled = true;
+    }
+    else if (param == "vname") {
+      vname = parseString(value, ',');
       handled = true;
     }
 
-    if(!handled)
+    else
+
+    if (!handled)
       reportUnhandledConfigWarning(orig);
-
   }
-  
-  registerVariables();	
-  return(true);
+
+  registerVariables();
+  return (true);
 }
 
 //---------------------------------------------------------
 // Procedure: registerVariables()
 
-void PointAssign::registerVariables()
-{
+void PointAssign::registerVariables() {
   AppCastingMOOSApp::RegisterVariables();
-  // Register("FOOBAR", 0);
+  Register("VISIT_POINT", 0);
 }
-
 
 //------------------------------------------------------------
 // Procedure: buildReport()
 
-bool PointAssign::buildReport() 
-{
-  m_msgs << "============================================" << endl;
-  m_msgs << "File:                                       " << endl;
-  m_msgs << "============================================" << endl;
-
-  ACTable actab(4);
-  actab << "Alpha | Bravo | Charlie | Delta";
-  actab.addHeaderLines();
-  actab << "one" << "two" << "three" << "four";
-  m_msgs << actab.getFormattedString();
-
-  return(true);
+bool PointAssign::buildReport() {
+  m_msgs << "Points received: " << m_points_received << endl;
+  m_msgs << "Points expected: " << m_points_expected << endl;
+  m_msgs << "Status: " << endl;
+  m_msgs << "First point received: " << boolToString(m_first_point_flag) << endl;
+  m_msgs << "Last point received: " << boolToString(m_last_point_flag) << endl;
+  m_msgs << "Total points received: " << m_points_received << endl;
+  m_msgs << "Total points: " << m_xypoints.size() << endl;
+  m_msgs << "Assignment mode: " << (m_alternating_mode ? "Alternating" : (m_regional_mode ? "Regional" : "None")) << endl;
+  // Print the names of the vehicles
+  for (size_t i = 0; i < vname.size(); i++) {
+    m_msgs << "Vehicle name " << (i + 1) << ": " << vname[i] << endl;
+  }
+  // Print the median_x if in regional mode
+  if (m_regional_mode) {
+    m_msgs << "Median x-coordinate for regional assignment: " << median_x << endl;
+  }
+  return (true);
 }
-
-
-
-
