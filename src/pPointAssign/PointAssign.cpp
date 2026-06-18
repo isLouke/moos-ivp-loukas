@@ -132,7 +132,10 @@ bool PointAssign::Iterate() {
     }
     
     m_result_sent = true;
+    
   }
+
+  m_Comms.Notify("PointAssignReady", "true"); // Notify the timer script that we are ready for input
 
   AppCastingMOOSApp::PostReport();
   return (true);
