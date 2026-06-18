@@ -43,6 +43,7 @@ ProcessConfig = uFldShoreBroker
   bridge   = src=RETURN_ALL, alias=RETURN
   bridge   = src=RETURN_$V,  alias=RETURN
   bridge   = src=REFUEL_NEEDED_ALL, alias=REFUEL_NEEDED
+  bridge   = src=VISIT_POINT_$V, alias=VISIT_POINT // I added this to send visit points to vehicles
 }
 
 //--------------------------------------------------------
@@ -89,7 +90,7 @@ ProcessConfig = pMarineViewer
 ProcessConfig = uTimerScript                                    
 {                                                               
   condition = PointAssignReady=true // I define the value of this variable in pPointAssign.cpp
-
+  delay_start = 10 // I setted this because I need some prior delay to ensure that the point assignment happens after the vehicles spawn
   // Define random points into a given region                                                              
   randvar        = varname=RND_X, min=-25, max=200, key=at_post, snap=1
   randvar        = varname=RND_Y, min=-175, max=-25, key=at_post, snap=1
@@ -106,6 +107,5 @@ ProcessConfig = pPointAssign
 
   total_points = 100 // Pass the total points, so the app knows how many there are.
   assignment_mode = regional // alternating or regional
-  median_x = 112
   vname = $(VNAMES) // henry, gilda, loukas, anti-claude
 }

@@ -104,25 +104,43 @@ bool PointAssign::Iterate() {
       Notify("VISIT_POINT_" + toupper(vname[i]), "firstpoint");
     }
 
-    if (m_alternating_mode) {
-    // Alternating Mode: Assign points to two vehicles in an alternating fashion
+    if (m_alternating_mode && !vname.empty()) {
+    // Alternating Mode: Assign points to N vehicles in an alternating fashion
     for (int i = 0; i < m_xypoints.size(); i++) {
-      string vehicle = (i % 2 == 0) ? vname[0] : vname[1];
+      string vehicle = vname[i % vname.size()];
       string color = (i % 2 == 0) ? "yellow" : "red";
-      Notify("VISIT_POINT_" + toupper(vehicle), m_xypoints[i].get_spec());
-      postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i), color);
+      
+      // Explicitly format the xy point instead of using get_spec(), adding id in case behaviors expect it
+      string point_str = "x=" + to_string(m_xypoints[i].x()) + ",y=" + to_string(m_xypoints[i].y()) + ",id=" + to_string(i + 1);
+      
+      Notify("VISIT_POINT_" + toupper(vehicle), point_str);
+      postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i + 1), color);
     }
   }
 
-  if (m_regional_mode) {
-    // Regional Mode: Assign points based on their x-coordinate
+  if (m_regional_mode && !vname.empty()) {
+    // Dynamically calculate the average x-coordinate
+    double sum_x = 0;
     for (int i = 0; i < m_xypoints.size(); i++) {
-      if (m_xypoints[i].x() < median_x) {
-        Notify("VISIT_POINT_" + toupper(vname[0]), m_xypoints[i].get_spec());
-        postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i), "yellow");
+      sum_x += m_xypoints[i].x();
+    }
+    median_x = m_xypoints.size() > 0 ? (sum_x / m_xypoints.size()) : 0;
+
+    // Regional Mode: Assign points based on whether x is less or greater than average
+    for (int i = 0; i < m_xypoints.size(); i++) {
+      string point_str = "x=" + to_string(m_xypoints[i].x()) + ",y=" + to_string(m_xypoints[i].y()) + ",id=" + to_string(i + 1);
+
+      if (vname.size() >= 2) {
+        if (m_xypoints[i].x() < median_x) {
+          Notify("VISIT_POINT_" + toupper(vname[0]), point_str);
+          postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i + 1), "yellow");
+        } else {
+          Notify("VISIT_POINT_" + toupper(vname[1]), point_str);
+          postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i + 1), "red");
+        }
       } else {
-        Notify("VISIT_POINT_" + toupper(vname[1]), m_xypoints[i].get_spec());
-        postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i), "red");
+        Notify("VISIT_POINT_" + toupper(vname[0]), point_str);
+        postViewPoint(m_xypoints[i].x(), m_xypoints[i].y(), to_string(i + 1), "yellow");
       }
     }
   }
@@ -135,7 +153,7 @@ bool PointAssign::Iterate() {
     
   }
 
-  m_Comms.Notify("PointAssignReady", "true"); // Notify the timer script that we are ready for input
+  Notify("PointAssignReady", "true"); // Notify the timer script that we are ready for input
 
   AppCastingMOOSApp::PostReport();
   return (true);
