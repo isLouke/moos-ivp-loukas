@@ -11,6 +11,9 @@
 #include "MBUtils.h"
 #include "ACTable.h"
 #include "GenPath.h"
+#include <random>
+#include <utility>
+#include <vector>
 
 using namespace std;
 
@@ -141,52 +144,145 @@ bool GenPath::OnConnectToServer()
 // Procedure: Iterate()
 //            happens AppTick times per second
 
+//---------------------------------------------------------
+// Procedure: Iterate()
+//            happens AppTick times per second
+
 bool GenPath::Iterate()
 {
   AppCastingMOOSApp::Iterate();
 
   if (!m_path_generated && m_first_point_received && m_last_point_received && !m_points.empty())
   {
-    XYSegList path;
+    int n_cities = m_points.size();
 
-    // Find the closest point to the current position
-    int closest_index = 0;
-    double closest_dist = hypot(m_points[0].x() - m_pos_x, m_points[0].y() - m_pos_y);
-    for (size_t i = 1; i < m_points.size(); ++i)
+    // SOM Parameters (Derived from som-tsp logic)
+    int n_neurons = n_cities * 8; // Convention: 8 neurons per city
+    int max_iter = 50000;         // 50k iterations is fast in C++ and robust for typical MOOS point clouds
+    double learning_rate = 0.8;
+    double radius = (double)n_neurons / 10.0;
+
+    // 1. Initialize Neurons in a circle around the bounding box center of the points
+    double min_x = m_points[0].x(), max_x = m_points[0].x();
+    double min_y = m_points[0].y(), max_y = m_points[0].y();
+    for (int i = 1; i < n_cities; ++i)
     {
-      double dist = hypot(m_points[i].x() - m_pos_x, m_points[i].y() - m_pos_y);
-      if (dist < closest_dist)
+      if (m_points[i].x() < min_x)
+        min_x = m_points[i].x();
+      if (m_points[i].x() > max_x)
+        max_x = m_points[i].x();
+      if (m_points[i].y() < min_y)
+        min_y = m_points[i].y();
+      if (m_points[i].y() > max_y)
+        max_y = m_points[i].y();
+    }
+
+    double center_x = (max_x + min_x) / 2.0;
+    double center_y = (max_y + min_y) / 2.0;
+    double circle_radius = std::max(max_x - min_x, max_y - min_y) / 2.0;
+
+    struct Neuron
+    {
+      double x, y;
+    };
+    std::vector<Neuron> neurons(n_neurons);
+    for (int i = 0; i < n_neurons; ++i)
+    {
+      double angle = 2.0 * M_PI * i / n_neurons;
+      neurons[i].x = center_x + circle_radius * std::cos(angle);
+      neurons[i].y = center_y + circle_radius * std::sin(angle);
+    }
+
+    // Setup RNG for picking random cities
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> dist(0, n_cities - 1);
+
+    // 2. Train the SOM
+    for (int iter = 0; iter < max_iter; ++iter)
+    {
+      int city_idx = dist(gen);
+      double cx = m_points[city_idx].x();
+      double cy = m_points[city_idx].y();
+
+      // Find the winning neuron (closest to the chosen city)
+      int winner = 0;
+      double min_dist = std::numeric_limits<double>::max();
+      for (int i = 0; i < n_neurons; ++i)
       {
-        closest_dist = dist;
-        closest_index = i;
+        double d = std::hypot(neurons[i].x - cx, neurons[i].y - cy);
+        if (d < min_dist)
+        {
+          min_dist = d;
+          winner = i;
+        }
+      }
+
+      // Update the winning neuron and its neighbors
+      for (int i = 0; i < n_neurons; ++i)
+      {
+        // Shortest distance in the circular array
+        int dist_i = std::abs(i - winner);
+        dist_i = std::min(dist_i, n_neurons - dist_i);
+
+        // Gaussian neighborhood function
+        double influence = std::exp(-(dist_i * dist_i) / (2.0 * radius * radius));
+
+        neurons[i].x += learning_rate * influence * (cx - neurons[i].x);
+        neurons[i].y += learning_rate * influence * (cy - neurons[i].y);
+      }
+
+      // Decay learning rate and radius
+      learning_rate *= 0.99997;
+      radius *= 0.99997;
+    }
+
+    // 3. Map cities to their closest winning neurons to extract the tour
+    std::vector<std::pair<int, int>> mapped_cities(n_cities);
+    for (int c = 0; c < n_cities; ++c)
+    {
+      int winner = 0;
+      double min_dist = std::numeric_limits<double>::max();
+      for (int n = 0; n < n_neurons; ++n)
+      {
+        double d = std::hypot(neurons[n].x - m_points[c].x(), neurons[n].y - m_points[c].y());
+        if (d < min_dist)
+        {
+          min_dist = d;
+          winner = n;
+        }
+      }
+      mapped_cities[c] = {winner, c};
+    }
+
+    // Sort cities by their assigned neuron index to form the continuous path
+    std::sort(mapped_cities.begin(), mapped_cities.end());
+
+    // 4. Align the cyclic tour to start at the city closest to our vehicle
+    int start_idx = 0;
+    double min_start_dist = std::numeric_limits<double>::max();
+    for (int i = 0; i < n_cities; ++i)
+    {
+      int c_idx = mapped_cities[i].second;
+      double d = std::hypot(m_points[c_idx].x() - m_pos_x, m_points[c_idx].y() - m_pos_y);
+      if (d < min_start_dist)
+      {
+        min_start_dist = d;
+        start_idx = i;
       }
     }
 
-    // Stack my position the closest point to me
-    path.add_vertex(m_pos_x, m_pos_y);
-    path.add_vertex(m_points[closest_index].x(), m_points[closest_index].y());
+    // 5. Construct the final MOOS XYSegList
+    XYSegList path;
+    path.add_vertex(m_pos_x, m_pos_y); // Always start from current nav position
 
-    std::vector<int> remaining_indices;
-    for (int i = 0; i < m_points.size(); ++i)
+    for (int i = 0; i < n_cities; ++i)
     {
-      if (i != closest_index)
-        remaining_indices.push_back(i);
+      // Wrap around the sorted array to ensure continuous loop from start index
+      int seq = (start_idx + i) % n_cities;
+      int c_idx = mapped_cities[seq].second;
+      path.add_vertex(m_points[c_idx].x(), m_points[c_idx].y());
     }
-
-    // Sort the remaining points based on their distance to the closest point
-    std::sort(remaining_indices.begin(), remaining_indices.end(),
-              [closest_index, this](int lhs, int rhs)
-              {
-                double lhs_dist = hypot(m_points[lhs].x() - m_points[closest_index].x(),
-                                        m_points[lhs].y() - m_points[closest_index].y());
-                double rhs_dist = hypot(m_points[rhs].x() - m_points[closest_index].x(),
-                                        m_points[rhs].y() - m_points[closest_index].y());
-                return lhs_dist < rhs_dist;
-              });
-
-    // Stack the remaining sorted points onto the path
-    for (int index : remaining_indices)
-      path.add_vertex(m_points[index].x(), m_points[index].y());
 
     Notify("GEN_PATH", "points=" + path.get_spec());
     m_path_generated = true;
