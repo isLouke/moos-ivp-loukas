@@ -242,13 +242,11 @@ void PointAssign::postViewPoint(double x, double y, string label, string color)
 // Procedure: buildReport()
 
 bool PointAssign::buildReport() {
-  m_msgs << "Points received: " << m_points_received << endl;
+  m_msgs << "============================================" << endl;
   m_msgs << "Points expected: " << m_points_expected << endl;
-  m_msgs << "Status: " << endl;
+  m_msgs << "Points received: " << m_points_received << endl;
   m_msgs << "First point received: " << boolToString(m_first_point_flag) << endl;
   m_msgs << "Last point received: " << boolToString(m_last_point_flag) << endl;
-  m_msgs << "Total points received: " << m_points_received << endl;
-  m_msgs << "Total points: " << m_xypoints.size() << endl;
   m_msgs << "Assignment mode: " << (m_alternating_mode ? "Alternating" : (m_regional_mode ? "Regional" : "None")) << endl;
   // Print the names of the vehicles
   for (size_t i = 0; i < vname.size(); i++) {
@@ -257,6 +255,11 @@ bool PointAssign::buildReport() {
   // Print the median_x if in regional mode
   if (m_regional_mode) {
     m_msgs << "Median x-coordinate for regional assignment: " << median_x << endl;
+  }
+  m_msgs << "============================================" << endl;
+
+  for (size_t i = 0; i < m_xypoints.size(); ++i) {
+    m_msgs << "Point " << i + 1 << ": x=" << m_xypoints[i].x() << "\t y=" << m_xypoints[i].y() << endl;
   }
   return (true);
 }
