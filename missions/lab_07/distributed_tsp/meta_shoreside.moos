@@ -106,6 +106,6 @@ ProcessConfig = pPointAssign
   CommsTick = 4
 
   total_points = 100 // Pass the total points, so the app knows how many there are.
-  assignment_mode = regional // alternating or regional
+  assignment_mode = alternating // alternating or regional
   vname = $(VNAMES) // henry, gilda, loukas, anti-claude
 }

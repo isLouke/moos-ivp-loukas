@@ -5,6 +5,8 @@
 /*    DATE: December 29th, 1963                             */
 /************************************************************/
 
+#include <algorithm>
+#include <cmath>
 #include <iterator>
 #include "MBUtils.h"
 #include "ACTable.h"
@@ -20,6 +22,8 @@ GenPath::GenPath()
   m_first_point_received = false;
   m_last_point_received = false;
   m_path_generated = false;
+  m_pos_x = 0;
+  m_pos_y = 0;
 }
 
 //---------------------------------------------------------
@@ -37,10 +41,12 @@ bool GenPath::OnNewMail(MOOSMSG_LIST &NewMail)
   AppCastingMOOSApp::OnNewMail(NewMail);
 
   MOOSMSG_LIST::iterator p;
-  for(p=NewMail.begin(); p!=NewMail.end(); p++) {
+  for (p = NewMail.begin(); p != NewMail.end(); p++)
+  {
     CMOOSMsg &msg = *p;
-    string key    = msg.GetKey();
-    string sval  = msg.GetString();
+    string key = msg.GetKey();
+    string sval = msg.GetString();
+    double dval = msg.GetDouble();
 
 #if 0 // Keep these around just for template
     string comm  = msg.GetCommunity();
@@ -51,33 +57,75 @@ bool GenPath::OnNewMail(MOOSMSG_LIST &NewMail)
     bool   mstr  = msg.IsString();
 #endif
 
-     if(key == "FOO"){ 
-       cout << "great!";}
-     else if(key == "VISIT_POINT"){
-        if (sval == "firstpoint") {
-          m_first_point_received = true;
-        } else if (sval == "lastpoint") {
-          m_last_point_received = true;
-        } else {
-          
-          std::string xpos = tokStringParse(sval, "x", ',', '=');
-          std::string ypos = tokStringParse(sval, "y", ',', '=');
+    if (key == "FOO")
+    {
+      cout << "great!";
+    }
+    else if (key == "NAV_X")
+    {
+      m_pos_x = dval;
+    }
+    else if (key == "NAV_Y")
+    {
+      m_pos_y = dval;
+    }
+    else if (key == "VISIT_POINT")
+    {
+      if (sval == "firstpoint")
+      {
+        m_first_point_received = true;
+      }
+      else if (sval == "lastpoint")
+      {
+        m_last_point_received = true;
+      }
+      else
+      {
+        std::string xpos = tokStringParse(sval, "x", ',', '=');
+        std::string ypos = tokStringParse(sval, "y", ',', '=');
 
-          if (!xpos.empty() && !ypos.empty()) {
-            double xcoord = std::stod(xpos.c_str());
-            double ycoord = std::stod(ypos.c_str());
-            
-            XYPoint new_point(xcoord, ycoord);
-            m_points.push_back(new_point);
-          }
+        if (!xpos.empty() && !ypos.empty())
+        {
+          double xcoord = std::stod(xpos.c_str());
+          double ycoord = std::stod(ypos.c_str());
+
+          XYPoint new_point(xcoord, ycoord);
+          m_points.push_back(new_point);
         }
-     }
+      }
+    }
+    else if (key == "VISIT_POINT")
+    {
+      if (sval == "firstpoint")
+      {
+        m_first_point_received = true;
+      }
+      else if (sval == "lastpoint")
+      {
+        m_last_point_received = true;
+      }
+      else
+      {
 
-     else if(key != "APPCAST_REQ") // handled by AppCastingMOOSApp
-       reportRunWarning("Unhandled Mail: " + key);
-   }
-	
-   return(true);
+        std::string xpos = tokStringParse(sval, "x", ',', '=');
+        std::string ypos = tokStringParse(sval, "y", ',', '=');
+
+        if (!xpos.empty() && !ypos.empty())
+        {
+          double xcoord = std::stod(xpos.c_str());
+          double ycoord = std::stod(ypos.c_str());
+
+          XYPoint new_point(xcoord, ycoord);
+          m_points.push_back(new_point);
+        }
+      }
+    }
+
+    else if (key != "APPCAST_REQ") // handled by AppCastingMOOSApp
+      reportRunWarning("Unhandled Mail: " + key);
+  }
+
+  return (true);
 }
 
 //---------------------------------------------------------
@@ -85,8 +133,8 @@ bool GenPath::OnNewMail(MOOSMSG_LIST &NewMail)
 
 bool GenPath::OnConnectToServer()
 {
-   registerVariables();
-   return(true);
+  registerVariables();
+  return (true);
 }
 
 //---------------------------------------------------------
@@ -96,9 +144,56 @@ bool GenPath::OnConnectToServer()
 bool GenPath::Iterate()
 {
   AppCastingMOOSApp::Iterate();
-  // Do your thing here!
+
+  if (!m_path_generated && m_first_point_received && m_last_point_received && !m_points.empty())
+  {
+    XYSegList path;
+
+    // Find the closest point to the current position
+    int closest_index = 0;
+    double closest_dist = hypot(m_points[0].x() - m_pos_x, m_points[0].y() - m_pos_y);
+    for (size_t i = 1; i < m_points.size(); ++i)
+    {
+      double dist = hypot(m_points[i].x() - m_pos_x, m_points[i].y() - m_pos_y);
+      if (dist < closest_dist)
+      {
+        closest_dist = dist;
+        closest_index = i;
+      }
+    }
+
+    // Stack my position the closest point to me
+    path.add_vertex(m_pos_x, m_pos_y);
+    path.add_vertex(m_points[closest_index].x(), m_points[closest_index].y());
+
+    std::vector<int> remaining_indices;
+    for (int i = 0; i < m_points.size(); ++i)
+    {
+      if (i != closest_index)
+        remaining_indices.push_back(i);
+    }
+
+    // Sort the remaining points based on their distance to the closest point
+    std::sort(remaining_indices.begin(), remaining_indices.end(),
+              [closest_index, this](int lhs, int rhs)
+              {
+                double lhs_dist = hypot(m_points[lhs].x() - m_points[closest_index].x(),
+                                        m_points[lhs].y() - m_points[closest_index].y());
+                double rhs_dist = hypot(m_points[rhs].x() - m_points[closest_index].x(),
+                                        m_points[rhs].y() - m_points[closest_index].y());
+                return lhs_dist < rhs_dist;
+              });
+
+    // Stack the remaining sorted points onto the path
+    for (int index : remaining_indices)
+      path.add_vertex(m_points[index].x(), m_points[index].y());
+
+    Notify("GEN_PATH", "points=" + path.get_spec());
+    m_path_generated = true;
+  }
+
   AppCastingMOOSApp::PostReport();
-  return(true);
+  return (true);
 }
 
 //---------------------------------------------------------
@@ -111,31 +206,33 @@ bool GenPath::OnStartUp()
 
   STRING_LIST sParams;
   m_MissionReader.EnableVerbatimQuoting(false);
-  if(!m_MissionReader.GetConfiguration(GetAppName(), sParams))
+  if (!m_MissionReader.GetConfiguration(GetAppName(), sParams))
     reportConfigWarning("No config block found for " + GetAppName());
 
   STRING_LIST::iterator p;
-  for(p=sParams.begin(); p!=sParams.end(); p++) {
-    string orig  = *p;
-    string line  = *p;
+  for (p = sParams.begin(); p != sParams.end(); p++)
+  {
+    string orig = *p;
+    string line = *p;
     string param = tolower(biteStringX(line, '='));
     string value = line;
 
     bool handled = false;
-    if(param == "foo") {
+    if (param == "foo")
+    {
       handled = true;
     }
-    else if(param == "bar") {
+    else if (param == "bar")
+    {
       handled = true;
     }
 
-    if(!handled)
+    if (!handled)
       reportUnhandledConfigWarning(orig);
-
   }
-  
-  registerVariables();	
-  return(true);
+
+  registerVariables();
+  return (true);
 }
 
 //---------------------------------------------------------
@@ -146,27 +243,25 @@ void GenPath::registerVariables()
   AppCastingMOOSApp::RegisterVariables();
   // Register("FOOBAR", 0);
   Register("VISIT_POINT", 0);
+  Register("NAV_X", 0);
+  Register("NAV_Y", 0);
 }
-
 
 //------------------------------------------------------------
 // Procedure: buildReport()
 
-bool GenPath::buildReport() 
+bool GenPath::buildReport()
 {
   m_msgs << "============================================" << endl;
   m_msgs << "Points Received: " << m_points.size() << endl;
   m_msgs << "First Point Received: " << boolToString(m_first_point_received) << endl;
   m_msgs << "Last Point Received: " << boolToString(m_last_point_received) << endl;
   m_msgs << "============================================" << endl;
-  
-  for (size_t i = 0; i < m_points.size(); ++i) {
+
+  for (size_t i = 0; i < m_points.size(); ++i)
+  {
     m_msgs << "Point " << i + 1 << ": x=" << m_points[i].x() << "\t y=" << m_points[i].y() << endl;
   }
-  
-  return(true);
+
+  return (true);
 }
-
-
-
-

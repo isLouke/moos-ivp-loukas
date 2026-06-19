@@ -5,6 +5,7 @@ initialize   DEPLOY  = true
 initialize   RETURN  = false
 initialize   STATION_KEEP = false
 initialize   LOITER  = true
+initialize   SURVEY  = true
 initialize   REFUEL_NEEDED = false
 
 set MODE = ACTIVE {
@@ -28,31 +29,54 @@ set MODE = RETURNING {
   RETURN = true
 } 
 
-set MODE = LOITERING {
+// set MODE = LOITERING {
+//   MODE = ACTIVE
+//   LOITER = true
+//   REFUEL_NEEDED = false
+// }
+
+set MODE = SURVEYING {
   MODE = ACTIVE
-  LOITER = true
+  SURVEY = true
   REFUEL_NEEDED = false
 }
 
 
 //----------------------------------------------
-Behavior = BHV_Loiter
-{
-  name      = loiter
-  pwt       = 100
-  condition = MODE==LOITERING
+// Behavior = BHV_Loiter
+// {
+//   name      = loiter
+//   pwt       = 100
+//   condition = MODE==LOITERING
 
-   post_suffix = A
-         speed = 1.8
-     clockwise = false
-        radius = 8.0
-     nm_radius = 15.0
-       polygon = radial::$(LOITER_POS), radius=20, pts=8, snap=1, label=$(VNAME)_LOITER
+//    post_suffix = A
+//          speed = 1.8
+//      clockwise = false
+//         radius = 8.0
+//      nm_radius = 15.0
+//        polygon = radial::$(LOITER_POS), radius=20, pts=8, snap=1, label=$(VNAME)_LOITER
 
-  visual_hints = nextpt_color=white, nextpt_lcolor=khaki
-  visual_hints = edge_color=orange, vertex_color=white
-  visual_hints = edge_size=1, vertex_size=2
-}
+//   visual_hints = nextpt_color=white, nextpt_lcolor=khaki
+//   visual_hints = edge_color=orange, vertex_color=white
+//   visual_hints = edge_size=1, vertex_size=2
+// }
+
+Behavior = BHV_Waypoint
+ {
+   name         = survey
+   pwt          = 100            
+   condition    = MODE==SURVEYING
+   endflag      = RETURN = true
+
+      capture_radius = 3                       // default
+        capture_line = false                   // default
+       lead_to_start = false                   // default
+               order = normal                  // default 
+              repeat = 0                       // default
+         slip_radius = 15                      // default
+               speed = 1.2                     // default is zero
+             updates = GEN_PATH
+ }
 
 
 //----------------------------------------------
@@ -117,7 +141,7 @@ Behavior = BHV_Timer
    name         = need-fuel-timer
    condition    = REFUEL_NEEDED = false
    condition    = STATION_KEEP  = false
-   duration     = 300
+   duration     = 600
    endflag      = REFUEL_NEEDED = true
    endflag      = RETURN        = true
    perpetual    = true

@@ -15,30 +15,33 @@
 
 class GenPath : public AppCastingMOOSApp
 {
- public:
-   GenPath();
-   ~GenPath();
+public:
+  GenPath();
+  ~GenPath();
 
- protected: // Standard MOOSApp functions to overload  
-   bool OnNewMail(MOOSMSG_LIST &NewMail);
-   bool Iterate();
-   bool OnConnectToServer();
-   bool OnStartUp();
+protected: // Standard MOOSApp functions to overload
+  bool OnNewMail(MOOSMSG_LIST &NewMail);
+  bool Iterate();
+  bool OnConnectToServer();
+  bool OnStartUp();
 
- protected: // Standard AppCastingMOOSApp function to overload 
-   bool buildReport();
+protected: // Standard AppCastingMOOSApp function to overload
+  bool buildReport();
 
- protected:
-   void registerVariables();
+protected:
+  void registerVariables();
 
- private: // Configuration variables
-   std::string m_visit_radius;
+private: // Configuration variables
+  std::string m_visit_radius;
 
- private: // State variables
-   bool m_first_point_received;
-   bool m_last_point_received;
-   bool m_path_generated;
-   std::vector<XYPoint> m_points;
+private: // State variables
+  bool m_first_point_received;
+  bool m_last_point_received;
+  bool m_path_generated;
+  std::vector<XYPoint> m_points;
+
+  double m_pos_x;
+  double m_pos_y;
 };
 
-#endif 
+#endif
