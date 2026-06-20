@@ -58,3 +58,7 @@ lib/
 # Temp files (emacs, etc)
 *#
 *~
+
+# Agent and AI Related Bloat
+AGENTS.md
+.opencode
