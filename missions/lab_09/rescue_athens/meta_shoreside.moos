@@ -189,7 +189,7 @@ ProcessConfig = uFldShoreBroker
 
   qbridge = DEPLOY, NODE_REPORT, NODE_MESSAGE, SURVEY
   qbridge = STATION_KEEP, APPCAST_REQ
-  bridge  = src=SWIMMER_ALERT_ABE, alias=SWIMMER_ALERT
+  bridge  = src=SWIMMER_ALERT_$V, alias=SWIMMER_ALERT
   bridge  = src=SWIMMER_ALERT_BEN, alias=SWIMMER_ALERT
   qbridge = MOOS_MANUAL_OVERIDE, MOOS_MANUAL_OVERRIDE
   qbridge = SURVEY_UPDATE, SCOUT_UPDATE, SCOUTED_SWIMMER
@@ -287,13 +287,9 @@ ProcessConfig = pMarineViewer
   point_viewable_all    = true
   point_viewable_labels = true
 
-  left_context[unreg_swimmer]   = XSWIMMER_ALERT = type=unreg,x=$[XPOS],y=$[YPOS]	
-  left_context[unreg_swimmer]   = SURVEY_ALL=true 
-  left_context[unreg_swimmer]   = RETURN_ALL=false
-
-  left_context[reg_swimmer]   = XSWIMMER_ALERT = type=reg,x=$[XPOS],y=$[YPOS]	
-  left_context[reg_swimmer]   = SURVEY_ALL=true 
-  left_context[reg_swimmer]   = RETURN_ALL=false
+  left_context[add_swimmer]   = XSWIMMER_ALERT = type=reg,x=$[XPOS],y=$[YPOS]	
+  left_context[add_swimmer]   = SURVEY_ALL=true 
+  left_context[add_swimmer]   = RETURN_ALL=false
 
   right_context[rescue]  = XFOUND_SWIMMER = x=$[XPOS],y=$[YPOS]	
   right_context[floater] = XSWIMMER_ALERT = type=floater,x=$[XPOS],y=$[YPOS]	

@@ -152,6 +152,32 @@ if [ "${VERBOSE}" = "yes" ]; then
     read ANSWER
 fi
 
+#------------------------------------------------------------
+#  Part 5B: Generate visit_events.moos from the swim file.
+#            Published at time=50 (delayed) so the vehicle has
+#            time to connect before the first event fires.
+#            This provides a reliable fallback path for
+#            pGenRescue if the SWIMMER_ALERT bridge is missed.
+#------------------------------------------------------------
+VISIT_TIME="10"
+SWIM_FILE_FINAL="${SWIM_FILE}"
+rm -f visit_events.moos
+touch visit_events.moos
+if [ -f "$SWIM_FILE_FINAL" ]; then
+    echo "event = var=VISIT_POINT, val=firstpoint, time=${VISIT_TIME}" >> visit_events.moos
+    while IFS= read -r line; do
+        if [[ $line == swimmer* ]]; then
+            x=$(echo "$line" | sed 's/.*x=\(-\?[0-9.]*\).*/\1/')
+            y=$(echo "$line" | sed 's/.*y=\(-\?[0-9.]*\).*/\1/')
+            echo "event = var=VISIT_POINT, val=\"x=${x},y=${y}\", time=${VISIT_TIME}" >> visit_events.moos
+        fi
+    done < "$SWIM_FILE_FINAL"
+    echo "event = var=VISIT_POINT, val=lastpoint, time=${VISIT_TIME}" >> visit_events.moos
+    vecho "Generated visit_events.moos from $SWIM_FILE_FINAL (time=$VISIT_TIME)"
+else
+    vecho "WARNING: swim file $SWIM_FILE_FINAL not found"
+fi
+
 #------------------------------------------------------------ 
 #  Part 6: Create the shoreside mission file
 #------------------------------------------------------------ 
