@@ -56,7 +56,11 @@ Behavior = BHV_Waypoint
 {
   name       = waypt_survey
   pwt        = 100
+#ifdef VROLE rescue
+  updates    = GEN_PATH
+#else
   updates    = SURVEY_UPDATE
+#endif
   condition  = MODE==SURVEYING
   perpetual  = true
   endflag    = RETURN = true

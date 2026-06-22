@@ -1,1 +1,1 @@
-            
+                score1=15, score2=0, dur=312.4, team1=abe, team2=unknown, winner=abe, mtype=rescue_r2, mhash_short=[WAVY-GROG], mhash_lshort=H-WAVY-GROG, mhash=mhash=260622-1604H-WAVY-GROG,utc=1782133486.49

@@ -38,3 +38,4 @@ rm -f   $VERBOSE   .LastOpenedMOOSLogDirectory
 rm -f   $VERBOSE   .mem_info*
 rm -f   $VERBOSE   vgroups.txt vnames.txt vpositions.txt vapps.txt
 rm -f   $VERBOSE   vcolors.txt vspeeds.txt vroles.txt vmates.txt
+rm -f   $VERBOSE   visit_events.moos

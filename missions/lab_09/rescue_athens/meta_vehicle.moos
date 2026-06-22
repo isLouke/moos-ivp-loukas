@@ -25,7 +25,7 @@ Processconfig = ANTLER
   Run = uTimerScript       @ NewConsole = false
   Run = pRealm             @ NewConsole = false
 #ifdef VROLE rescue
-  Run = $(PGR=pGenRescue)  @ NewConsole = false
+  Run = pGenPath           @ NewConsole = false
 #endif
 
 #ifdef XMODE SIM
@@ -83,17 +83,16 @@ ProcessConfig = pHelmIvP
 }
 
 //------------------------------------------
-// pGenRescue config block
+// pGenPath config block
+// Receives VISIT_POINT messages from the shoreside (all swimmer
+// locations) plus NAV_X/NAV_Y. Computes the optimal TSP path
+// through all swimmers using a SOM algorithm and publishes
+// GEN_PATH with the ordered waypoints for the helm to follow.
 
-ProcessConfig = pGenRescue
+ProcessConfig = pGenPath
 {
-#ifdef VNAME abe
-	// foo = true
-#elseifdef VNAME ben
-	// foo = false
-#else
-	// foo = maybe
-#endif
+  AppTick   = 4
+  CommsTick = 4
 }
 
 //------------------------------------------

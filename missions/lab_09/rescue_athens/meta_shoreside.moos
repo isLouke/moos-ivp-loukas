@@ -28,7 +28,8 @@ Processconfig = ANTLER
   Run = uFldCollisionDetect @ NewConsole = false
   Run = pRealm              @ NewConsole = false
   Run = uFldRescueMgr       @ NewConsole = false
-  Run = pMissionEval        @ NewConsole = false
+   Run = pMissionEval        @ NewConsole = false
+   Run = uTimerScript        @ NewConsole = false
 #ifdef AUTO_LAUNCHED yes
   Run = pAutoPoke           @ NewConsole = false
 #endif
@@ -50,6 +51,25 @@ ProcessConfig = pAutoPoke
   flag = MOOS_MANUAL_OVERRIDE_ALL=false
 
   required_nodes = 2
+}
+
+
+//--------------------------------------------------
+// uTimerScript config block
+// Publishes VISIT_POINT events at mission start so pGenPath
+// on the vehicle receives all swimmer locations and computes
+// the optimal (TSP) path through them.
+// Events are dynamically generated from the swim file by
+// launch.sh into visit_events.moos, which is included here.
+
+ProcessConfig = uTimerScript
+{
+  AppTick   = 1
+  CommsTick = 1
+
+  reset_max = 0
+
+#include visit_events.moos
 }
 
 
@@ -176,6 +196,7 @@ ProcessConfig = uFldShoreBroker
   qbridge = CONTACT_INFO
   qbridge = NODE_COLOR_CHANGE, PID_THRUST_CAP
   
+  bridge  = src=VISIT_POINT
   bridge  = src=AVOID
   bridge  = src=UFRM_LEADER
   bridge  = src=UFRM_WINNER
