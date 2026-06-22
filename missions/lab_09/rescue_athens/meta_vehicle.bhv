@@ -66,7 +66,8 @@ Behavior = BHV_Waypoint
   capture_radius = 3.0 
     capture_line = true
      slip_radius = 8.0
-          points = -190,-8:-150,-32:-110,-58:-66,-34:-38,-2
+          points = -66,-34:-110,-58
+//          points = -190,-8:-150,-32:-110,-58:-66,-34:-38,-2
 
 	crs_spd_zaic_ratio = 85
 	
@@ -107,7 +108,7 @@ Behavior = BHV_AvoidObstacleV24
   polygon    = pts={-31,-6:-32.17,-3.17:-35,-2:-37.83,-3.17:-39,-6:-37.83,-8.83:-35,-10:-32.17,-8.83}, label=buoy_1
 
   allowable_ttc     = 20
-  pwt_outer_dist    = 10
+  pwt_outer_dist    = 14
   pwt_inner_dist    = 6
   completed_dist    = 500
   min_util_cpa_dist = 4
@@ -128,7 +129,7 @@ Behavior = BHV_AvoidObstacleV24
   polygon    = pts={-58.5,-17.9:-59.67,-15.07:-62.5,-13.9:-65.33,-15.07:-66.5,-17.9:-65.33,-20.73:-62.5,-21.9:-59.67,-20.73}, label=buoy_2
 
   allowable_ttc     = 20
-  pwt_outer_dist    = 10
+  pwt_outer_dist    = 14
   pwt_inner_dist    = 6
   completed_dist    = 500
   min_util_cpa_dist = 4
@@ -149,7 +150,7 @@ Behavior = BHV_AvoidObstacleV24
   polygon    = pts={-91,-28:-92.17,-25.17:-95,-24:-97.83,-25.17:-99,-28:-97.83,-30.83:-95,-32:-92.17,-30.83}, label=buoy_3
 
   allowable_ttc     = 20
-  pwt_outer_dist    = 10
+  pwt_outer_dist    = 14
   pwt_inner_dist    = 6
   completed_dist    = 500
   min_util_cpa_dist = 4
@@ -206,7 +207,7 @@ Behavior = BHV_Waypoint
   capture_radius = 4.0
      slip_radius = 12.0
 
-	point = $(START_POS)
+	point = start
 
      visual_hints = vertex_size  = 4             // default
      visual_hints = vertex_color = dodger_blue   // default
@@ -229,7 +230,7 @@ Behavior = BHV_OpRegionV24
   visual_hints = halt_edge_color = gray40
 	
 	save_dist = 1
-	halt_dist = 4.5
+	halt_dist = 6.5
 
 	recover_spd = 0.6
 }
