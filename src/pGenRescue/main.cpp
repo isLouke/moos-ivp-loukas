@@ -1,8 +1,8 @@
 /************************************************************/
-/*    NAME: Mike Benjamin                                   */
-/*    ORGN: MIT                                             */
+/*    NAME: George Loukas                                   */
+/*    ORGN: MIT, Cambridge MA                               */
 /*    FILE: main.cpp                                        */
-/*    DATE: April 18th, 2022                                */
+/*    DATE: June 22nd, 2026                                 */
 /************************************************************/
 
 #include <sys/types.h>
@@ -28,6 +28,8 @@ int main(int argc, char *argv[])
       showExampleConfigAndExit();
     else if((argi == "--help")||(argi=="-h"))
       showHelpAndExit();
+    else if((argi == "--interface")||(argi=="-i"))
+      showInterfaceAndExit();
     else if(strEnds(argi, ".moos") || strEnds(argi, ".moos++"))
       mission_file = argv[i];
     else if(strBegins(argi, "--alias="))
@@ -40,14 +42,6 @@ int main(int argc, char *argv[])
     showHelpAndExit();
   
   cout << "pGenRescue running as: " << run_command << endl;
-
- // Seed the random number generator  
-  unsigned long tseed = time(NULL)+1;
-  unsigned long pid = (long)getpid()+1;
-  unsigned long seed = (tseed%999999);
-  seed = ((rand())*seed)%999999;
-  seed = (seed*pid)%999999;
-  srand(seed);
 
   GenRescue GenRescue;
 
