@@ -21,12 +21,11 @@ void showSynopsis()
   blk("SYNOPSIS:                                                       ");
   blk("------------------------------------                            ");
   blk("  Generates a waypoint path through known swimmer locations     ");
-  blk("  for a rescue vehicle. Ingestes SWIMMER_ALERT messages from   ");
-  blk("  the shoreside uFldRescueMgr with swimmer coordinates and     ");
-  blk("  FOUND_SWIMMER messages indicating rescues. Uses a Self-     ");
-  blk("  Organizing Map (SOM) TSP algorithm to plan the optimal       ");
-  blk("  visit order, and publishes the result as a GEN_PATH update   ");
-  blk("  for the helm BHV_Waypoint behavior.                          ");
+  blk("  for a rescue vehicle. Ingests SWIMMER_ALERT messages from the");
+  blk("  shoreside uFldRescueMgr with swimmer coordinates (deduped by ");
+  blk("  id), removes rescued swimmers on FOUND_SWIMMER, and posts an ");
+  blk("  optimal open traversal (SOM TSP) to GEN_PATH for the helm's  ");
+  blk("  BHV_Waypoint behavior.                                        ");
   blk("                                                                ");
 }
 
@@ -95,11 +94,14 @@ void showInterfaceAndExit()
   blk("                                                                ");
   blk("SUBSCRIPTIONS:                                                  ");
   blk("------------------------------------                            ");
-  blk("  SWIMMER_ALERT = x=23, y=54, id=04                            ");
-  blk("      Swimner coordinates from shoreside uFldRescueMgr.         ");
+  blk("  SWIMMER_ALERT = x=34.0, y=85.0, id=21                        ");
+  blk("      Swimmer coordinates from shoreside uFldRescueMgr.         ");
+  blk("      Parsed with stripBlankEnds and isNumber validation.       ");
   blk("                                                                ");
-  blk("  FOUND_SWIMMER = id=01, finder=abe                             ");
+  blk("  FOUND_SWIMMER = id=21, finder=abe                             ");
   blk("      Notification that a swimmer has been rescued.             ");
+  blk("      Removes the swimmer from the active set and triggers a    ");
+  blk("      replan of the remaining route.                            ");
   blk("                                                                ");
   blk("  NAV_X = double                                                ");
   blk("      Ownship X position from the simulator or GPS.             ");
@@ -107,18 +109,20 @@ void showInterfaceAndExit()
   blk("  NAV_Y = double                                                ");
   blk("      Ownship Y position from the simulator or GPS.             ");
   blk("                                                                ");
-  blk("  VISIT_POINT = firstpoint | x=23,y=54 | lastpoint              ");
-  blk("      Fallback coordinate source if SWIMMER_ALERT is missed     ");
-  blk("      due to launch timing. Accumulated between firstpoint/     ");
-  blk("      lastpoint markers and converted to swimmer entries.       ");
-  blk("                                                                ");
   blk("PUBLICATIONS:                                                   ");
   blk("------------------------------------                            ");
   blk("  GEN_PATH = points = x1,y1:x2,y2:...                          ");
   blk("      Ordered waypoint path update for BHV_Waypoint.            ");
+  blk("      Only re-posted when the waypoint list actually changes    ");
+  blk("      to avoid resetting the waypoint index unnecessarily.      ");
   blk("                                                                ");
   blk("  VIEW_SEGLIST = spec                                           ");
   blk("      Visualization of the planned path in pMarineViewer.       ");
+  blk("                                                                ");
+  blk("  RETURN = true | false                                         ");
+  blk("      Posted true when all swimmers are resolved, signaling     ");
+  blk("      the helm to transition to the return-home behavior.       ");
+  blk("      Posted false when a new swimmer arrives after return.     ");
   blk("                                                                ");
   exit(0);
 }
