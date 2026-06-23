@@ -21,13 +21,17 @@ void showSynopsis()
   blk("SYNOPSIS:                                                       ");
   blk("------------------------------------                            ");
   blk("  The pGenRescue application plans an optimal path to visit     ");
-  blk("  and rescue swimmers during a rescue mission. It receives      ");
-  blk("  SWIMMER_ALERT messages from the shoreside (x=..., y=...,      ");
-  blk("  id=...), tracks which swimmers have been rescued via           ");
-  blk("  FOUND_SWIMMER messages, and uses a Self-Organizing Map (SOM)  ");
-  blk("  to generate an efficient TSP tour. The resulting waypoint     ");
-  blk("  path is published via SURVEY_UPDATE to the helm's BHV_Waypoint");
-  blk("  behavior, enabling dynamic re-planning as new alerts arrive.  ");
+  blk("  and rescue swimmers during a cooperative rescue mission. It   ");
+  blk("  receives SWIMMER_ALERT messages from the shoreside, tracks    ");
+  blk("  rescued swimmers via FOUND_SWIMMER, and uses a Self-Organizing");
+  blk("  Map (SOM) TSP solver to generate an efficient tour.           ");
+  blk("                                                                ");
+  blk("  Competitive adaptive logic runs predictive sweeps every N     ");
+  blk("  seconds, estimating rival time-to-target (TTT) via greedy     ");
+  blk("  nearest-neighbor tours from NODE_REPORT data. Swimmers where  ");
+  blk("  a rival reaches first are pruned, ensuring efficient division ");
+  blk("  of labour. A RESCUE_REGION polygon can further filter alerts. ");
+  blk("  The resulting path is published via SURVEY_UPDATE.            ");
   blk("                                                                ");
 }
 
@@ -78,6 +82,10 @@ void showExampleConfigAndExit()
   blk("  AppTick   = 4                                                 ");
   blk("  CommsTick = 4                                                 ");
   blk("                                                                ");
+  blk("  own_speed           = 1.5                                     ");
+  blk("  rival_default_speed = 1.5                                     ");
+  blk("  update_interval     = 15.0                                    ");
+  blk("  max_rival_age       = 30.0                                    ");
   blk("}                                                               ");
   blk("                                                                ");
   exit(0);
@@ -102,6 +110,8 @@ void showInterfaceAndExit()
   blk("  FOUND_SWIMMER  = id=01, finder=abe                            ");
   blk("  NAV_X          = double (vehicle X position)                  ");
   blk("  NAV_Y          = double (vehicle Y position)                  ");
+  blk("  NODE_REPORT    = NAME=alpha,TYPE=UUV,X=51.71,Y=-35.50,SPD=2.0");
+  blk("  RESCUE_REGION  = pts={-215,-2:-76,-86:-16,6:-79,4}           ");
   blk("                                                                ");
   blk("PUBLICATIONS:                                                   ");
   blk("------------------------------------                            ");

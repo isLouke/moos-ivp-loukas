@@ -15,6 +15,7 @@
 #include <vector>
 #include "MBUtils.h"
 #include "ACTable.h"
+#include "XYFormatUtilsPoly.h"
 #include "GenRescue.h"
 
 using namespace std;
@@ -27,6 +28,11 @@ GenRescue::GenRescue()
   m_path_generated = false;
   m_pos_x = 0;
   m_pos_y = 0;
+  m_last_predict_time = 0;
+  m_own_speed = 1.2;
+  m_rival_default_speed = 1.2;
+  m_update_interval = 15.0;
+  m_max_rival_age = 30.0;
 }
 
 //---------------------------------------------------------
@@ -94,6 +100,14 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
       s.id = id;
       s.x = stod(xpos);
       s.y = stod(ypos);
+
+      // Check if swimmer is within rescue region
+      if (m_rescue_region.is_convex() && !m_rescue_region.contains(s.x, s.y))
+      {
+        reportEvent("Ignoring swimmer id=" + id + " outside rescue region");
+        continue;
+      }
+
       m_swimmers.push_back(s);
       m_path_generated = false;
 
@@ -132,6 +146,38 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
         reportEvent("Swimmer found/rescued: id=" + id);
       }
     }
+    else if (key == "NODE_REPORT")
+    {
+      // Parse competitor vehicle report
+      // Format: NAME=alpha,TYPE=UUV,X=51.71,Y=-35.50,SPD=2.0,HDG=118.8,...
+      string vname = tokStringParse(sval, "NAME", ',', '=');
+      string xstr = tokStringParse(sval, "X", ',', '=');
+      string ystr = tokStringParse(sval, "Y", ',', '=');
+      string spdstr = tokStringParse(sval, "SPD", ',', '=');
+
+      // Skip own reports and malformed messages
+      if (vname == GetAppName() || xstr.empty() || ystr.empty())
+        continue;
+
+      double x = strtod(xstr.c_str(), NULL);
+      double y = strtod(ystr.c_str(), NULL);
+      double spd = spdstr.empty() ? m_rival_default_speed : strtod(spdstr.c_str(), NULL);
+
+      Rival rival;
+      rival.vname = vname;
+      rival.x = x;
+      rival.y = y;
+      rival.spd = spd;
+      rival.timestamp = MOOSTime();
+
+      m_rivals[vname] = rival;
+    }
+    else if (key == "RESCUE_REGION")
+    {
+      XYPolygon poly = string2Poly(sval);
+      if (poly.is_convex())
+        m_rescue_region = poly;
+    }
     else if (key != "APPCAST_REQ") // handled by AppCastingMOOSApp
       reportRunWarning("Unhandled Mail: " + key);
   }
@@ -160,6 +206,15 @@ bool GenRescue::Iterate()
   if (!m_path_generated && !m_swimmers.empty())
     generatePath();
 
+  // Periodic adaptive re-planning based on rival positions
+  double elapsed = MOOSTime() - m_last_predict_time;
+  if (elapsed >= m_update_interval)
+  {
+    m_last_predict_time = MOOSTime();
+    predictiveSweep();
+    m_path_generated = false;
+  }
+
   AppCastingMOOSApp::PostReport();
   return (true);
 }
@@ -186,12 +241,24 @@ bool GenRescue::OnStartUp()
     string value = line;
 
     bool handled = false;
-    if (param == "foo")
+    if (param == "own_speed")
     {
+      m_own_speed = atof(value.c_str());
       handled = true;
     }
-    else if (param == "bar")
+    else if (param == "rival_default_speed")
     {
+      m_rival_default_speed = atof(value.c_str());
+      handled = true;
+    }
+    else if (param == "update_interval")
+    {
+      m_update_interval = atof(value.c_str());
+      handled = true;
+    }
+    else if (param == "max_rival_age")
+    {
+      m_max_rival_age = atof(value.c_str());
       handled = true;
     }
 
@@ -213,6 +280,8 @@ void GenRescue::registerVariables()
   Register("FOUND_SWIMMER", 0);
   Register("NAV_X", 0);
   Register("NAV_Y", 0);
+  Register("NODE_REPORT", 0);
+  Register("RESCUE_REGION", 0);
 }
 
 //------------------------------------------------------------
@@ -231,6 +300,23 @@ bool GenRescue::buildReport()
   {
     m_msgs << "Swimmer " << i + 1 << ": id=" << m_swimmers[i].id
            << ", x=" << m_swimmers[i].x << ", y=" << m_swimmers[i].y << endl;
+  }
+
+  m_msgs << "============================================" << endl;
+  m_msgs << "Competitive State:" << endl;
+  m_msgs << "  Update Interval: " << m_update_interval << " s" << endl;
+  m_msgs << "  Last Predict: " << (m_last_predict_time > 0 ? doubleToString(m_last_predict_time, 1) : "never") << endl;
+  m_msgs << "  Rescue Region: " << (m_rescue_region.is_convex() ? "active" : "none") << endl;
+  m_msgs << "  Active Rivals: " << uintToString(m_rivals.size()) << endl;
+
+  for (map<string, Rival>::iterator it = m_rivals.begin(); it != m_rivals.end(); ++it)
+  {
+    double age = MOOSTime() - it->second.timestamp;
+    m_msgs << "    " << it->first
+           << " x=" << doubleToString(it->second.x, 1)
+           << ", y=" << doubleToString(it->second.y, 1)
+           << ", spd=" << doubleToString(it->second.spd, 2)
+           << ", age=" << doubleToString(age, 1) << "s" << endl;
   }
 
   return (true);
@@ -257,10 +343,14 @@ void GenRescue::generatePath()
   double min_y = m_swimmers[0].y, max_y = m_swimmers[0].y;
   for (int i = 1; i < n_cities; ++i)
   {
-    if (m_swimmers[i].x < min_x) min_x = m_swimmers[i].x;
-    if (m_swimmers[i].x > max_x) max_x = m_swimmers[i].x;
-    if (m_swimmers[i].y < min_y) min_y = m_swimmers[i].y;
-    if (m_swimmers[i].y > max_y) max_y = m_swimmers[i].y;
+    if (m_swimmers[i].x < min_x)
+      min_x = m_swimmers[i].x;
+    if (m_swimmers[i].x > max_x)
+      max_x = m_swimmers[i].x;
+    if (m_swimmers[i].y < min_y)
+      min_y = m_swimmers[i].y;
+    if (m_swimmers[i].y > max_y)
+      max_y = m_swimmers[i].y;
   }
 
   double center_x = (max_x + min_x) / 2.0;
@@ -375,4 +465,120 @@ void GenRescue::generatePath()
   m_path_generated = true;
 
   reportEvent("Published SURVEY_UPDATE with " + uintToString(n_cities) + " swimmer waypoints");
+}
+
+//------------------------------------------------------------
+// Procedure: predictiveSweep()
+//            Periodically evaluates rival vehicle positions
+//            and prunes swimmers that a rival can reach
+//            before we would in our tour order.
+
+void GenRescue::predictiveSweep()
+{
+  double now = MOOSTime();
+
+  for (map<string, Rival>::iterator rit = m_rivals.begin();
+       rit != m_rivals.end(); ++rit)
+  {
+    Rival &rival = rit->second;
+    double age = now - rival.timestamp;
+    if (age > m_max_rival_age)
+      continue; // stale rival, skip
+
+    // Step 1: Compute rival's greedy nearest-neighbor TTT to each swimmer
+    // Make working copies of remaining swimmer positions
+    vector<pair<double, double>> remaining;
+    vector<string> remaining_ids;
+    for (size_t i = 0; i < m_swimmers.size(); i++)
+    {
+      remaining.push_back(make_pair(m_swimmers[i].x, m_swimmers[i].y));
+      remaining_ids.push_back(m_swimmers[i].id);
+    }
+
+    double rspd = rival.spd;
+    if (rspd <= 0)
+      rspd = m_rival_default_speed;
+
+    double rpos_x = rival.x;
+    double rpos_y = rival.y;
+
+    map<string, double> rival_ttt_map;
+    double rival_ttt = 0;
+
+    while (!remaining.empty())
+    {
+      // Find nearest remaining swimmer
+      int nearest_idx = 0;
+      double nearest_dist = numeric_limits<double>::max();
+      for (size_t i = 0; i < remaining.size(); i++)
+      {
+        double d = hypot(remaining[i].first - rpos_x,
+                         remaining[i].second - rpos_y);
+        if (d < nearest_dist)
+        {
+          nearest_dist = d;
+          nearest_idx = i;
+        }
+      }
+
+      rival_ttt += nearest_dist / rspd;
+      rival_ttt_map[remaining_ids[nearest_idx]] = rival_ttt;
+
+      // Move rival position to this swimmer
+      rpos_x = remaining[nearest_idx].first;
+      rpos_y = remaining[nearest_idx].second;
+
+      // Remove from working set
+      remaining.erase(remaining.begin() + nearest_idx);
+      remaining_ids.erase(remaining_ids.begin() + nearest_idx);
+    }
+
+    // Step 2: Compute our own TTT using the m_swimmers tour order
+    double opos_x = m_pos_x;
+    double opos_y = m_pos_y;
+    double ospd = m_own_speed;
+    double own_ttt = 0;
+    map<string, double> own_ttt_map;
+
+    for (size_t i = 0; i < m_swimmers.size(); i++)
+    {
+      double d = hypot(m_swimmers[i].x - opos_x, m_swimmers[i].y - opos_y);
+      own_ttt += d / ospd;
+      own_ttt_map[m_swimmers[i].id] = own_ttt;
+      opos_x = m_swimmers[i].x;
+      opos_y = m_swimmers[i].y;
+    }
+
+    // Step 3: Prune swimmers where rival reaches first
+    vector<string> to_remove;
+    for (size_t i = 0; i < m_swimmers.size(); i++)
+    {
+      if (rival_ttt_map.count(m_swimmers[i].id) &&
+          own_ttt_map.count(m_swimmers[i].id))
+      {
+        if (rival_ttt_map[m_swimmers[i].id] < own_ttt_map[m_swimmers[i].id])
+        {
+          to_remove.push_back(m_swimmers[i].id);
+          reportEvent("Dropping swimmer " + m_swimmers[i].id + " — rival " + rival.vname + " reaches it " + doubleToString(own_ttt_map[m_swimmers[i].id] - rival_ttt_map[m_swimmers[i].id], 1) + "s faster");
+        }
+      }
+    }
+
+    // Remove marked swimmers from m_swimmers
+    if (!to_remove.empty())
+    {
+      for (size_t i = 0; i < to_remove.size(); i++)
+      {
+        for (size_t j = 0; j < m_swimmers.size(); j++)
+        {
+          if (m_swimmers[j].id == to_remove[i])
+          {
+            m_swimmers.erase(m_swimmers.begin() + j);
+            break;
+          }
+        }
+      }
+      m_path_generated = false;
+    }
+  }
 }

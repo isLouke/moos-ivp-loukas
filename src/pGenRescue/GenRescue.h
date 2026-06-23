@@ -12,6 +12,8 @@
 #include "XYPoint.h"
 #include "XYFormatUtilsPoint.h"
 #include "XYSegList.h"
+#include "XYPolygon.h"
+#include <map>
 #include <set>
 
 class GenRescue : public AppCastingMOOSApp
@@ -32,6 +34,7 @@ protected: // Standard AppCastingMOOSApp function to overload
 protected:
   void registerVariables();
   void generatePath();
+  void predictiveSweep();
 
 private: // Configuration variables
 
@@ -42,9 +45,25 @@ private: // State variables
     double      y;
   };
 
+  struct Rival {
+    std::string vname;
+    double      x;
+    double      y;
+    double      spd;
+    double      timestamp;  // MOOSTime when last NODE_REPORT received
+  };
+
   std::vector<Swimmer>  m_swimmers;
   std::set<std::string> m_rescued_ids;
   bool                  m_path_generated;
+
+  XYPolygon                        m_rescue_region;
+  std::map<std::string, Rival>     m_rivals;
+  double                           m_last_predict_time;
+  double                           m_own_speed;
+  double                           m_rival_default_speed;
+  double                           m_update_interval;
+  double                           m_max_rival_age;
 
   double m_pos_x;
   double m_pos_y;
