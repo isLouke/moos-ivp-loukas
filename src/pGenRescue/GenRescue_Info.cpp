@@ -20,10 +20,14 @@ void showSynopsis()
 {
   blk("SYNOPSIS:                                                       ");
   blk("------------------------------------                            ");
-  blk("  The pGenRescue application is used for               ");
-  blk("                                                                ");
-  blk("                                                                ");
-  blk("                                                                ");
+  blk("  The pGenRescue application plans an optimal path to visit     ");
+  blk("  and rescue swimmers during a rescue mission. It receives      ");
+  blk("  SWIMMER_ALERT messages from the shoreside (x=..., y=...,      ");
+  blk("  id=...), tracks which swimmers have been rescued via           ");
+  blk("  FOUND_SWIMMER messages, and uses a Self-Organizing Map (SOM)  ");
+  blk("  to generate an efficient TSP tour. The resulting waypoint     ");
+  blk("  path is published via SURVEY_UPDATE to the helm's BHV_Waypoint");
+  blk("  behavior, enabling dynamic re-planning as new alerts arrive.  ");
   blk("                                                                ");
 }
 
@@ -94,12 +98,14 @@ void showInterfaceAndExit()
   blk("                                                                ");
   blk("SUBSCRIPTIONS:                                                  ");
   blk("------------------------------------                            ");
-  blk("  NODE_MESSAGE = src_node=alpha,dest_node=bravo,var_name=FOO,   ");
-  blk("                 string_val=BAR                                 ");
+  blk("  SWIMMER_ALERT  = x=23, y=54, id=04                            ");
+  blk("  FOUND_SWIMMER  = id=01, finder=abe                            ");
+  blk("  NAV_X          = double (vehicle X position)                  ");
+  blk("  NAV_Y          = double (vehicle Y position)                  ");
   blk("                                                                ");
   blk("PUBLICATIONS:                                                   ");
   blk("------------------------------------                            ");
-  blk("  Publications are determined by the node message content.      ");
+  blk("  SURVEY_UPDATE  = points=0,0:23,54:-4,95 (XYSegList spec)     ");
   blk("                                                                ");
   exit(0);
 }
@@ -112,4 +118,3 @@ void showReleaseInfoAndExit()
   showReleaseInfo("pGenRescue", "gpl");
   exit(0);
 }
-
