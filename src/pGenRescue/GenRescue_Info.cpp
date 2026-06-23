@@ -107,6 +107,11 @@ void showInterfaceAndExit()
   blk("  NAV_Y = double                                                ");
   blk("      Ownship Y position from the simulator or GPS.             ");
   blk("                                                                ");
+  blk("  VISIT_POINT = firstpoint | x=23,y=54 | lastpoint              ");
+  blk("      Fallback coordinate source if SWIMMER_ALERT is missed     ");
+  blk("      due to launch timing. Accumulated between firstpoint/     ");
+  blk("      lastpoint markers and converted to swimmer entries.       ");
+  blk("                                                                ");
   blk("PUBLICATIONS:                                                   ");
   blk("------------------------------------                            ");
   blk("  GEN_PATH = points = x1,y1:x2,y2:...                          ");

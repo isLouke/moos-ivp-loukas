@@ -31,6 +31,8 @@ class GenRescue : public AppCastingMOOSApp
   protected:
     bool handleMailNewSwimmer(std::string);
     bool handleMailFoundSwimmer(std::string);
+    bool handleMailVisitPoint(std::string);
+    void flushVisitPoints();
     bool postPath();
     bool postNullPath();
     void clearSwimmers();
@@ -49,6 +51,16 @@ class GenRescue : public AppCastingMOOSApp
 
     // Stored SOM-optimized ordering of swimmer IDs (only includes live swimmers)
     std::vector<std::string> m_ordered_ids;
+
+    // VISIT_POINT accumulation (fallback if SWIMMER_ALERT bridge is delayed)
+    bool                        m_collecting_visits;
+    std::vector<XYPoint>        m_visit_accumulator;
+    bool                        m_visit_points_flushed;
+
+    // True once at least one SWIMMER_ALERT has been received.
+    // Used to suppress the VISIT_POINT fallback and to clean up
+    // any auto-generated vp_* entries when real alerts arrive.
+    bool                        m_swimmer_alert_received;
 
     // Swimmer tracking: id -> {x, y, rescued}
    std::map<std::string, double> m_swimmer_x;

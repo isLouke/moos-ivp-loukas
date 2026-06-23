@@ -33,6 +33,9 @@ GenRescue::GenRescue()
   m_nav_y_set = false;
   m_path_needs_update = false;
   m_path_needs_som = false;
+  m_collecting_visits = false;
+  m_visit_points_flushed = false;
+  m_swimmer_alert_received = false;
 }
 
 //---------------------------------------------------------
@@ -61,6 +64,8 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
       m_nav_y = msg.GetDouble();
       m_nav_y_set = true;
     }
+    else if(key == "VISIT_POINT")
+      handled = handleMailVisitPoint(sval);
     else if(key != "APPCAST_REQ")
       handled = false;
 
@@ -129,6 +134,7 @@ void GenRescue::RegisterVariables()
   Register("FOUND_SWIMMER", 0);
   Register("NAV_X", 0);
   Register("NAV_Y", 0);
+  Register("VISIT_POINT", 0);
 }
 
 //---------------------------------------------------------
@@ -145,6 +151,15 @@ bool GenRescue::handleMailNewSwimmer(string str)
     reportRunWarning("Unhandled SWIMMER_ALERT: " + str);
     return(false);
   }
+
+  // Mark that we've received a real alert. This keeps the VISIT_POINT
+  // fallback from flushing again on subsequent lastpoint events (if the
+  // timer fires again). We do NOT clear VISIT_POINT-derived entries here:
+  // a mid-mission click adds ONE new swimmer, and clearing vp_* entries
+  // would lose all the original swimmers until the next broadcast.
+  // Coexisting vp_* and real entries at the same coordinates is harmless
+  // (duplicate waypoints at the same location — the vehicle visits once).
+  m_swimmer_alert_received = true;
 
   // Ignore swimmers we already know about
   if(m_swimmer_rescued.count(id)) {
@@ -163,8 +178,8 @@ bool GenRescue::handleMailNewSwimmer(string str)
   m_path_needs_update = true;
   m_path_needs_som = true;
 
-  reportEvent("New swimmer: id=" + id +
-              ", x=" + xstr + ", y=" + ystr);
+  reportEvent("SWM_DEBUG: New swimmer received! id=" + id +
+              " (x=" + xstr + ", y=" + ystr + "). Triggering SOM recompute.");
   return(true);
 }
 
@@ -206,6 +221,71 @@ bool GenRescue::handleMailFoundSwimmer(string str)
 }
 
 //---------------------------------------------------------
+// Procedure: handleMailVisitPoint()
+//   Purpose: Accumulate VISIT_POINT coordinates as a fallback
+//            in case SWIMMER_ALERT was missed (e.g., vehicle
+//            connected after the initial alert burst).
+//   Example: VISIT_POINT = firstpoint
+//            VISIT_POINT = x=23,y=54
+//            VISIT_POINT = lastpoint
+//
+//   On "firstpoint" we start accumulating. On each coordinate
+//   we store it. On "lastpoint", if no SWIMMER_ALERT swimmer
+//   data has arrived yet, the accumulated points are flushed
+//   into the swimmer map with auto-generated IDs.
+
+bool GenRescue::handleMailVisitPoint(string str)
+{
+  if(str == "firstpoint") {
+    m_visit_accumulator.clear();
+    m_collecting_visits = true;
+    return(true);
+  }
+
+  if(str == "lastpoint") {
+    m_collecting_visits = false;
+    // Only flush if we still have received no real SWIMMER_ALERT
+    // (vehicle may have connected after the initial alert burst).
+    if(!m_swimmer_alert_received && !m_visit_accumulator.empty())
+      flushVisitPoints();
+    return(true);
+  }
+
+  // Parse coordinate: x=<x>,y=<y>
+  if(m_collecting_visits) {
+    string xstr = tokStringParse(str, "x", ',', '=');
+    string ystr = tokStringParse(str, "y", ',', '=');
+    if(!xstr.empty() && !ystr.empty()) {
+      m_visit_accumulator.push_back(
+        XYPoint(stod(xstr), stod(ystr)));
+    }
+  }
+  return(true);
+}
+
+//---------------------------------------------------------
+// Procedure: flushVisitPoints()
+//   Purpose: Convert accumulated VISIT_POINT data into
+//            swimmer entries with auto-generated IDs.
+
+void GenRescue::flushVisitPoints()
+{
+  for(size_t i = 0; i < m_visit_accumulator.size(); ++i) {
+    string id = "vp_" + to_string(i);
+    m_swimmer_x[id] = m_visit_accumulator[i].x();
+    m_swimmer_y[id] = m_visit_accumulator[i].y();
+    m_swimmer_rescued[id] = false;
+  }
+
+  reportEvent("Flushed " + to_string(m_visit_accumulator.size()) +
+              " VISIT_POINT coordinates as swimmer locations");
+
+  m_visit_points_flushed = true;
+  m_path_needs_update = true;
+  m_path_needs_som = true;
+}
+
+//---------------------------------------------------------
 // Procedure: postPath()
 //   Purpose: Build a path through all un-rescued swimmers,
 //            starting from current ownship position.
@@ -238,6 +318,7 @@ bool GenRescue::postPath()
   // (i.e., the set of swimmer positions grew). On rescue, the
   // stored SOM order is still valid — just filter out the rescued.
   if(m_path_needs_som || m_ordered_ids.empty()) {
+    reportEvent("SWM_DEBUG: Recomputing SOM path for " + to_string(unrescued) + " swimmers...");
     m_ordered_ids = computeSOMOrder();
     m_path_needs_som = false;
   }
@@ -412,6 +493,10 @@ void GenRescue::clearSwimmers()
   m_swimmer_y.clear();
   m_swimmer_rescued.clear();
   m_ordered_ids.clear();
+  m_visit_accumulator.clear();
+  m_collecting_visits = false;
+  m_visit_points_flushed = false;
+  m_swimmer_alert_received = false;
   m_path_needs_update = false;
   m_path_needs_som = false;
 }
@@ -424,6 +509,14 @@ bool GenRescue::buildReport()
   m_msgs << "Vehicle Name: " << m_vname << endl;
   m_msgs << "Nav Status:   x=" << doubleToStringX(m_nav_x, 1)
          << " y=" << doubleToStringX(m_nav_y, 1) << endl;
+  m_msgs << "VISIT_ACCUM:  " << m_visit_accumulator.size()
+         << " (coll=" << boolToString(m_collecting_visits)
+         << " flushed=" << boolToString(m_visit_points_flushed)
+         << ")" << endl;
+  m_msgs << "SWIMMER_ALERT received: "
+         << boolToString(m_swimmer_alert_received) << endl;
+  m_msgs << "Total tracked swimmers: "
+         << m_swimmer_rescued.size() << endl;
   m_msgs << endl;
   m_msgs << "Swimmer Tracking:" << endl;
   m_msgs << "--------------------------------" << endl;
