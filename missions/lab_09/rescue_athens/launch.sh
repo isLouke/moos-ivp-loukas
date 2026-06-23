@@ -173,44 +173,6 @@ INIT_VARS=" --amt=$VAMT $RAND_VPOS $VERBOSE $RAND_SWIMMERS"
 INIT_VARS+=" --format=$GAME_FORMAT $SWIM_REGION $SWIMMERS $UNREGERS "
 ./init_field.sh $INIT_VARS
 
-#------------------------------------------------------------
-#  Part 4A: Generate VISIT_POINT events for pGenPath from the
-#           swim file. These are sent from the shoreside to
-#           the vehicle via uFldShoreBroker so pGenPath can
-#           compute the optimal path through all swimmers.
-#------------------------------------------------------------
-# Resolve the actual swim file path from the various input formats:
-#   --swim_file=<name>, -1, -2, -3, -4, or default athens_rand.txt
-SWIM_FILE_FINAL=""
-SRC="${SWIM_FILE}"  # may have leading space
-SRC="${SRC# }"      # strip leading space
-case "$SRC" in
-    --swim_file=*)  SWIM_FILE_FINAL="${SRC#--swim_file=}" ;;
-    -1)             SWIM_FILE_FINAL="athens_01.txt" ;;
-    -2)             SWIM_FILE_FINAL="athens_02.txt" ;;
-    -3)             SWIM_FILE_FINAL="athens_03.txt" ;;
-    -4)             SWIM_FILE_FINAL="athens_04.txt" ;;
-    *)              SWIM_FILE_FINAL="athens_rand.txt" ;;
-esac
-# Always create visit_events.moos (even if empty) so nsplug does
-# not error on the #include in meta_shoreside.moos.
-rm -f visit_events.moos
-touch visit_events.moos
-if [ -f "$SWIM_FILE_FINAL" ]; then
-    echo "event = var=VISIT_POINT, val=firstpoint, time=1" >> visit_events.moos
-    while IFS= read -r line; do
-        if [[ $line == swimmer* ]]; then
-            x=$(echo "$line" | sed 's/.*x=\(-\?[0-9.]*\).*/\1/')
-            y=$(echo "$line" | sed 's/.*y=\(-\?[0-9.]*\).*/\1/')
-            echo "event = var=VISIT_POINT, val=\"x=${x},y=${y}\", time=1" >> visit_events.moos
-        fi
-    done < "$SWIM_FILE_FINAL"
-    echo "event = var=VISIT_POINT, val=lastpoint, time=1" >> visit_events.moos
-    vecho "Generated visit_events.moos from $SWIM_FILE_FINAL"
-else
-    echo "$ME: WARNING - swim file $SWIM_FILE_FINAL not found, no VISIT_POINT events"
-fi
-
 VEHPOS=(`cat vpositions.txt`)
 SPEEDS=(`cat vspeeds.txt`)
 VNAMES=(`cat vnames.txt`)

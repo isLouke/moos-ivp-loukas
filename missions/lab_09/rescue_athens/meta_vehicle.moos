@@ -25,7 +25,7 @@ Processconfig = ANTLER
   Run = uTimerScript       @ NewConsole = false
   Run = pRealm             @ NewConsole = false
 #ifdef VROLE rescue
-  Run = pGenRescue         @ NewConsole = false
+  Run = $(PGR=pGenRescue)  @ NewConsole = false
 #endif
 
 #ifdef XMODE SIM
@@ -84,18 +84,16 @@ ProcessConfig = pHelmIvP
 
 //------------------------------------------
 // pGenRescue config block
-// Receives SWIMMER_ALERT and FOUND_SWIMMER messages from the
-// shoreside uFldRescueMgr plus NAV_X/NAV_Y. Tracks swimmer
-// locations and rescue status, computes a greedy nearest-neighbor
-// TSP path through all un-rescued swimmers, and publishes
-// GEN_PATH with the ordered waypoints for the helm to follow.
 
 ProcessConfig = pGenRescue
 {
-  AppTick   = 4
-  CommsTick = 4
-
-  vname    = $(VNAME)
+#ifdef VNAME abe
+	// foo = true
+#elseifdef VNAME ben
+	// foo = false
+#else
+	// foo = maybe
+#endif
 }
 
 //------------------------------------------
@@ -161,11 +159,6 @@ ProcessConfig = uFldNodeBroker
   bridge = src=NODE_MESSAGE_LOCAL, alias=NODE_MESSAGE
 	bridge = src=VIEW_COMMS_PULSE
 
-	// Vehicle-to-shore bridges: these go OUT from the vehicle.
-	// SWIMMER_ALERT and FOUND_SWIMMER are SHORE-TO-VEHICLE,
-	// pushed by uFldShoreBroker and received automatically
-	// by the vehicle's pShare listener on $(PSHARE_PORT).
-	// They must NOT have a bridge here.
 	bridge = src=RESCUE_REQUEST
 	bridge = src=SCOUT_REQUEST
 }

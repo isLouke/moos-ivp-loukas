@@ -56,11 +56,7 @@ Behavior = BHV_Waypoint
 {
   name       = waypt_survey
   pwt        = 100
-#ifdef VROLE rescue
-  updates    = GEN_PATH
-#else
   updates    = SURVEY_UPDATE
-#endif
   condition  = MODE==SURVEYING
   perpetual  = true
   endflag    = RETURN = true
@@ -234,7 +230,7 @@ Behavior = BHV_OpRegionV24
   visual_hints = halt_edge_color = gray40
 	
 	save_dist = 1
-	halt_dist = 6.5
+	halt_dist = 5
 
 	recover_spd = 0.6
 }

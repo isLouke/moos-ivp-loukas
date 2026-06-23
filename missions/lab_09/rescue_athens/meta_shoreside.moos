@@ -28,8 +28,7 @@ Processconfig = ANTLER
   Run = uFldCollisionDetect @ NewConsole = false
   Run = pRealm              @ NewConsole = false
   Run = uFldRescueMgr       @ NewConsole = false
-   Run = pMissionEval        @ NewConsole = false
-   Run = uTimerScript        @ NewConsole = false
+  Run = pMissionEval        @ NewConsole = false
 #ifdef AUTO_LAUNCHED yes
   Run = pAutoPoke           @ NewConsole = false
 #endif
@@ -51,25 +50,6 @@ ProcessConfig = pAutoPoke
   flag = MOOS_MANUAL_OVERRIDE_ALL=false
 
   required_nodes = 2
-}
-
-
-//--------------------------------------------------
-// uTimerScript config block
-// Publishes VISIT_POINT events at mission start so pGenPath
-// on the vehicle receives all swimmer locations and computes
-// the optimal (TSP) path through them.
-// Events are dynamically generated from the swim file by
-// launch.sh into visit_events.moos, which is included here.
-
-ProcessConfig = uTimerScript
-{
-  AppTick   = 1
-  CommsTick = 1
-
-  reset_max = 0
-
-#include visit_events.moos
 }
 
 
@@ -188,15 +168,12 @@ ProcessConfig = uFldShoreBroker
   CommsTick = 1
 
   qbridge = DEPLOY, NODE_REPORT, NODE_MESSAGE, SURVEY
-  qbridge = STATION_KEEP, APPCAST_REQ
-  bridge  = src=SWIMMER_ALERT_$V, alias=SWIMMER_ALERT
-  bridge  = src=SWIMMER_ALERT_BEN, alias=SWIMMER_ALERT
+  qbridge = STATION_KEEP, APPCAST_REQ, SWIMMER_ALERT
   qbridge = MOOS_MANUAL_OVERIDE, MOOS_MANUAL_OVERRIDE
   qbridge = SURVEY_UPDATE, SCOUT_UPDATE, SCOUTED_SWIMMER
   qbridge = CONTACT_INFO
   qbridge = NODE_COLOR_CHANGE, PID_THRUST_CAP
   
-  bridge  = src=VISIT_POINT
   bridge  = src=AVOID
   bridge  = src=UFRM_LEADER
   bridge  = src=UFRM_WINNER
@@ -287,9 +264,13 @@ ProcessConfig = pMarineViewer
   point_viewable_all    = true
   point_viewable_labels = true
 
-  left_context[add_swimmer]   = XSWIMMER_ALERT = type=reg,x=$[XPOS],y=$[YPOS]	
-  left_context[add_swimmer]   = SURVEY_ALL=true 
-  left_context[add_swimmer]   = RETURN_ALL=false
+  left_context[unreg_swimmer]   = XSWIMMER_ALERT = type=unreg,x=$[XPOS],y=$[YPOS]	
+  left_context[unreg_swimmer]   = SURVEY_ALL=true 
+  left_context[unreg_swimmer]   = RETURN_ALL=false
+
+  left_context[reg_swimmer]   = XSWIMMER_ALERT = type=reg,x=$[XPOS],y=$[YPOS]	
+  left_context[reg_swimmer]   = SURVEY_ALL=true 
+  left_context[reg_swimmer]   = RETURN_ALL=false
 
   right_context[rescue]  = XFOUND_SWIMMER = x=$[XPOS],y=$[YPOS]	
   right_context[floater] = XSWIMMER_ALERT = type=floater,x=$[XPOS],y=$[YPOS]	
