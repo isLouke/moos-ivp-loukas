@@ -1,0 +1,17 @@
+event = var=VISIT_POINT, val=firstpoint, time=10
+event = var=VISIT_POINT, val="x=-137,y=-31", time=10
+event = var=VISIT_POINT, val="x=-74,y=-6", time=10
+event = var=VISIT_POINT, val="x=-103,y=-2", time=10
+event = var=VISIT_POINT, val="x=-111,y=-25", time=10
+event = var=VISIT_POINT, val="x=-198,y=-7", time=10
+event = var=VISIT_POINT, val="x=-112,y=-56", time=10
+event = var=VISIT_POINT, val="x=-95,y=-44", time=10
+event = var=VISIT_POINT, val="x=-139,y=-38", time=10
+event = var=VISIT_POINT, val="x=-157,y=-6", time=10
+event = var=VISIT_POINT, val="x=-82,y=-33", time=10
+event = var=VISIT_POINT, val="x=-156,y=-30", time=10
+event = var=VISIT_POINT, val="x=-98,y=-51", time=10
+event = var=VISIT_POINT, val="x=-130,y=-44", time=10
+event = var=VISIT_POINT, val="x=-84,y=-49", time=10
+event = var=VISIT_POINT, val="x=-142,y=-10", time=10
+event = var=VISIT_POINT, val=lastpoint, time=10
