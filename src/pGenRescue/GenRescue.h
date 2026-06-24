@@ -34,39 +34,44 @@ protected: // Standard AppCastingMOOSApp function to overload
 protected:
   void registerVariables();
   void generatePath();
-  void predictiveSweep();
+  bool predictiveSweep();
 
 private: // Configuration variables
-
 private: // State variables
-  struct Swimmer {
-    std::string id;
-    double      x;
-    double      y;
+  struct Swimmer
+  {
+    int id;
+    double x;
+    double y;
+    double target_weight;
+    bool rescued;
+    bool ignored;
+    std::string finder;
   };
 
-  struct Rival {
-    std::string vname;
-    double      x;
-    double      y;
-    double      spd;
-    double      timestamp;  // MOOSTime when last NODE_REPORT received
+  struct State
+  {
+    std::string name;
+    double x;
+    double y;
+    double speed;
+    double heading;
+    double timestamp;
+    bool valid;
+    bool friendly;
   };
 
-  std::vector<Swimmer>  m_swimmers;
-  std::set<std::string> m_rescued_ids;
-  bool                  m_path_generated;
+  // Swimmers tracking
+  std::vector<Swimmer> m_swimmers;
 
-  XYPolygon                        m_rescue_region;
-  std::map<std::string, Rival>     m_rivals;
-  double                           m_last_predict_time;
-  double                           m_own_speed;
-  double                           m_rival_default_speed;
-  double                           m_update_interval;
-  double                           m_max_rival_age;
+  // States
+  State m_my_state;
+  std::vector<State> m_rivals;
 
-  double m_pos_x;
-  double m_pos_y;
+  bool m_generate_path;
+  std::string m_scout_name;
+
+  XYPolygon m_rescue_region;
 };
 
 #endif

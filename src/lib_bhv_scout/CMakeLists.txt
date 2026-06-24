@@ -13,8 +13,8 @@ TARGET_LINK_LIBRARIES(BHV_Scout
    logic 
    ivpcore 
    bhvutil 
+   geometry
    mbutil 
-   geometry 
 )
 
 
