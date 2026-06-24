@@ -23,7 +23,7 @@ void showSynopsis()
   blk("  The pGenRescue application plans an optimal path to visit     ");
   blk("  and rescue swimmers during a cooperative rescue mission. It   ");
   blk("  receives SWIMMER_ALERT messages from the shoreside, tracks    ");
-  blk("  rescued swimmers via FOUND_SWIMMER, and uses a Self-Organizing");
+  blk("  rescued swimmers via RESCUED_SWIMMER, and uses a Self-Organizing");
   blk("  Map (SOM) TSP solver to generate an efficient tour.           ");
   blk("                                                                ");
   blk("  Competitive adaptive logic runs predictive sweeps every N     ");
@@ -106,16 +106,21 @@ void showInterfaceAndExit()
   blk("                                                                ");
   blk("SUBSCRIPTIONS:                                                  ");
   blk("------------------------------------                            ");
-  blk("  SWIMMER_ALERT  = x=23, y=54, id=04                            ");
-  blk("  FOUND_SWIMMER  = id=01, finder=abe                            ");
-  blk("  NAV_X          = double (vehicle X position)                  ");
-  blk("  NAV_Y          = double (vehicle Y position)                  ");
-  blk("  NODE_REPORT    = NAME=alpha,TYPE=UUV,X=51.71,Y=-35.50,SPD=2.0");
-  blk("  RESCUE_REGION  = pts={-215,-2:-76,-86:-16,6:-79,4}           ");
+  blk("  NAV_X           = double (vehicle X position)                 ");
+  blk("  NAV_Y           = double (vehicle Y position)                 ");
+  blk("  NAV_SPEED       = double (vehicle speed in m/s)               ");
+  blk("  NAV_HEADING     = double (vehicle heading in degrees)         ");
+  blk("  RESCUED_SWIMMER = id=07, finder=cal                           ");
+  blk("  RESCUE_REGION   = pts={-215,-2:-76,-86:-16,6:-79,4}          ");
+  blk("  SCOUTED_SWIMMER = id=18, x=-150, y=-50                        ");
+  blk("  SWIMMER_ALERT   = x=23, y=54, id=04                           ");
+  blk("  UFRM_LEADER     = abe (name of current competition leader)    ");
+  blk("  NODE_REPORT     = NAME=alpha,TYPE=UUV,X=51.71,Y=-35.50,SPD=2.0");
   blk("                                                                ");
   blk("PUBLICATIONS:                                                   ");
   blk("------------------------------------                            ");
   blk("  SURVEY_UPDATE  = points=0,0:23,54:-4,95 (XYSegList spec)     ");
+  blk("                   (planned -- generatePath() is not yet wired) ");
   blk("                                                                ");
   exit(0);
 }
