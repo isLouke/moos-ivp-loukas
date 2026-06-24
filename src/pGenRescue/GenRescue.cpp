@@ -255,21 +255,33 @@ bool GenRescue::Iterate()
 {
   AppCastingMOOSApp::Iterate();
 
-  // 1.2.1    Check the position. Update if changed.
-  // 1.2.2    Check if the swimmer is within the rescue region. If not, ignore.
-  // 1.2.3    Make sure the swimmer is not already rescued or ignored.
+  // 1 Check the position. Update if changed.
+  // 2 Check if the swimmer is within the rescue region. If not, ignore.
+  // 3 Make sure the swimmer is not already rescued or ignored.
 
-  // // Check if the swimmer is within the rescue region
-  //   if (m_rescue_region.is_convex() && !m_rescue_region.contains(s.x, s.y))
-  //   {
-  //     reportEvent("Ignoring swimmer id=" + id + " outside rescue region");
-  //     s.ignored = true;
-  //     continue;
-  //   }
+  if (m_swimmers.size() > 0)
+  {
+    for (int i = 0; i < m_swimmers.size(); ++i)
+    {
+      // Check if the swimmer is already rescued or should be ignored.
+      if (m_swimmers[i].rescued || m_swimmers[i].ignored)
+        continue;
 
-  // // Regenerate path whenever the swimmer set changes
-  // if (!m_path_generated && !m_swimmers.empty())
-  //   generatePath();
+      // Check if the swimmer is within the rescue region
+      if (m_rescue_region.is_convex() && !m_rescue_region.contains(m_swimmers[i].x, m_swimmers[i].y))
+      {
+        reportEvent("Ignoring swimmer id=" + intToString(m_swimmers[i].id) + " outside rescue region");
+        m_swimmers[i].ignored = true;
+      }
+    }
+  }
+
+  // Regenerate path based on flag
+  if (m_generate_path)
+  {
+    generatePath();
+    m_generate_path = false;
+  }
 
   // // Periodic adaptive re-planning based on rival positions
   // double elapsed = MOOSTime() - m_last_predict_time;
