@@ -70,16 +70,6 @@ private: // State variables
 
   std::string m_scout_name;
 
-  // Configuration
-  double m_own_speed_default;
-  double m_rival_default_speed;
-  double m_update_interval;
-  double m_max_rival_age;
-
-  // Timing for periodic replanning
-  double m_last_plan_time;
-  bool   m_generate_path;
-
   XYPolygon m_rescue_region;
 };
 

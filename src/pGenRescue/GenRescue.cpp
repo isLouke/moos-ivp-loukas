@@ -17,6 +17,7 @@
 #include "ACTable.h"
 #include "XYFormatUtilsPoly.h"
 #include "PathUtils.h"
+#include "AngleUtils.h"
 #include "GenRescue.h"
 
 using namespace std;
@@ -37,16 +38,6 @@ GenRescue::GenRescue()
   m_my_state.name = "Luke Skywalker";
 
   m_scout_name = "ben";
-
-  // Configuration defaults
-  m_own_speed_default = 1.5;
-  m_rival_default_speed = 1.5;
-  m_update_interval = 15.0;
-  m_max_rival_age = 30.0;
-
-  // Timing
-  m_last_plan_time = 0;
-  m_generate_path = true;
 }
 
 //---------------------------------------------------------
@@ -87,12 +78,10 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
     if (key == "NAV_X") // Checked OK
     {
       m_my_state.x = dval;
-      m_my_state.valid = true;
     }
     else if (key == "NAV_Y") // Checked OK
     {
       m_my_state.y = dval;
-      m_my_state.valid = true;
     }
     else if (key == "NAV_SPEED") // Checked OK
     {
@@ -300,10 +289,9 @@ bool GenRescue::Iterate()
     double dist_mine = hypot(m_my_state.x - m_swimmers[i].x, m_my_state.y - m_swimmers[i].y);
     double ttt_mine = (m_my_state.speed > 0) ? dist_mine / m_my_state.speed : 9999.0;
 
-    double my_angle_to_swimmer = atan2(m_swimmers[i].y - m_my_state.y, m_swimmers[i].x - m_my_state.x) * (180.0 / M_PI);
-    double my_angle_diff = fabs(my_angle_to_swimmer - m_my_state.heading);
-    if (my_angle_diff > 180.0)
-      my_angle_diff = 360.0 - my_angle_diff;
+    double my_angle_to_swimmer = relAng(m_my_state.x, m_my_state.y,
+                                        m_swimmers[i].x, m_swimmers[i].y);
+    double my_angle_diff = angleDiff(my_angle_to_swimmer, m_my_state.heading);
 
     // My base score: High if TTT is low. Penalized slightly if I have to turn around.
     // heading_factor ranges from 1.0 (perfectly aligned) to 0.0 (pointed opposite way)
@@ -319,10 +307,9 @@ bool GenRescue::Iterate()
       double dist_rival = hypot(m_rivals[j].x - m_swimmers[i].x, m_rivals[j].y - m_swimmers[i].y);
       double ttt_rival = (m_rivals[j].speed > 0) ? dist_rival / m_rivals[j].speed : 9999.0;
 
-      double rival_angle_to_swimmer = atan2(m_swimmers[i].y - m_rivals[j].y, m_swimmers[i].x - m_rivals[j].x) * (180.0 / M_PI);
-      double rival_angle_diff = fabs(rival_angle_to_swimmer - m_rivals[j].heading);
-      if (rival_angle_diff > 180.0)
-        rival_angle_diff = 360.0 - rival_angle_diff;
+      double rival_angle_to_swimmer = relAng(m_rivals[j].x, m_rivals[j].y,
+                                             m_swimmers[i].x, m_swimmers[i].y);
+      double rival_angle_diff = angleDiff(rival_angle_to_swimmer, m_rivals[j].heading);
 
       // Rival threat: High if TTT is low AND they are pointed directly at it
       double rival_heading_factor = 1.0 - (rival_angle_diff / 180.0);
