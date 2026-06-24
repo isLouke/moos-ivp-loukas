@@ -37,7 +37,7 @@ GenRescue::GenRescue()
   m_my_state.friendly = true;
   m_my_state.name = "Luke Skywalker";
 
-  m_scout_name = "ben";
+  m_scout_name = "reserved";
 }
 
 //---------------------------------------------------------
@@ -304,6 +304,9 @@ bool GenRescue::Iterate()
 
     for (int j = 0; j < m_rivals.size(); ++j)
     {
+      if (m_rivals[j].friendly)
+        continue;
+
       double dist_rival = hypot(m_rivals[j].x - m_swimmers[i].x, m_rivals[j].y - m_swimmers[i].y);
       double ttt_rival = (m_rivals[j].speed > 0) ? dist_rival / m_rivals[j].speed : 9999.0;
 
@@ -410,12 +413,11 @@ bool GenRescue::buildReport()
   m_msgs << "==============================================" << endl;
   m_msgs << "                   My State                   " << endl;
   m_msgs << "==============================================" << endl;
-  m_msgs << "  Name:    " << m_my_state.name << endl;
-  m_msgs << "  X:       " << doubleToString(m_my_state.x, 2) << endl;
-  m_msgs << "  Y:       " << doubleToString(m_my_state.y, 2) << endl;
-  m_msgs << "  Speed:   " << doubleToString(m_my_state.speed, 2) << endl;
-  m_msgs << "  Heading: " << doubleToString(m_my_state.heading, 2) << endl;
-  m_msgs << "  Valid:   " << (m_my_state.valid ? "yes" : "no") << endl;
+  m_msgs << "  Name:     " << m_my_state.name << endl;
+  m_msgs << "  X:        " << doubleToString(m_my_state.x, 2) << endl;
+  m_msgs << "  Y:        " << doubleToString(m_my_state.y, 2) << endl;
+  m_msgs << "  Speed:    " << doubleToString(m_my_state.speed, 2) << endl;
+  m_msgs << "  Heading:  " << doubleToString(m_my_state.heading, 2) << endl;
   m_msgs << endl;
 
   // Report Rivals
@@ -431,7 +433,12 @@ bool GenRescue::buildReport()
   {
     for (int i = 0; i < m_rivals.size(); ++i)
     {
-      m_msgs << intToString(i + 1) << ": " << m_rivals[i].name << ", X: " << doubleToString(m_rivals[i].x, 2) << ", Y: " << doubleToString(m_rivals[i].y, 2) << ", Speed: " << doubleToString(m_rivals[i].speed, 2) << ", Heading: " << doubleToString(m_rivals[i].heading, 2) << ", Friendly: " << (m_rivals[i].friendly ? "yes" : "no") << endl;
+      m_msgs << "  Name:     " << m_rivals[i].name << endl;
+      m_msgs << "  X:        " << doubleToString(m_rivals[i].x, 2) << endl;
+      m_msgs << "  Y:        " << doubleToString(m_rivals[i].y, 2) << endl;
+      m_msgs << "  Speed:    " << doubleToString(m_rivals[i].speed, 2) << endl;
+      m_msgs << "  Heading:  " << doubleToString(m_rivals[i].heading, 2) << endl;
+      m_msgs << "  Friendly: " << (m_rivals[i].friendly ? "yes" : "no") << endl;
     }
   }
   // Report Swimmers
