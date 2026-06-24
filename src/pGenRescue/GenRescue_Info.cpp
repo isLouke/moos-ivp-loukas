@@ -23,8 +23,8 @@ void showSynopsis()
   blk("  The pGenRescue application plans an optimal path to visit     ");
   blk("  and rescue swimmers during a cooperative rescue mission. It   ");
   blk("  receives SWIMMER_ALERT messages from the shoreside, tracks    ");
-  blk("  rescued swimmers via RESCUED_SWIMMER, and uses a Self-Organizing");
-  blk("  Map (SOM) TSP solver to generate an efficient tour.           ");
+  blk("  rescued swimmers via RESCUED_SWIMMER, and uses a greedy nearest-");
+  blk("  neighbor tour (greedyPath() from lib_geometry).              ");
   blk("                                                                ");
   blk("  Competitive adaptive logic runs predictive sweeps every N     ");
   blk("  seconds, estimating rival time-to-target (TTT) via greedy     ");
@@ -120,7 +120,7 @@ void showInterfaceAndExit()
   blk("PUBLICATIONS:                                                   ");
   blk("------------------------------------                            ");
   blk("  SURVEY_UPDATE  = points=0,0:23,54:-4,95 (XYSegList spec)     ");
-  blk("                   (planned -- generatePath() is not yet wired) ");
+  blk("                   (generated via greedyPath() from lib_geometry) ");
   blk("                                                                ");
   exit(0);
 }

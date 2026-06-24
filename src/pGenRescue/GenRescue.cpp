@@ -16,6 +16,7 @@
 #include "MBUtils.h"
 #include "ACTable.h"
 #include "XYFormatUtilsPoly.h"
+#include "PathUtils.h"
 #include "GenRescue.h"
 
 using namespace std;
@@ -25,9 +26,6 @@ using namespace std;
 
 GenRescue::GenRescue()
 {
-  // Flag to trigger path generation
-  m_generate_path = true;
-
   // My Vehicle State
   m_my_state.x = 0;
   m_my_state.y = 0;
@@ -39,6 +37,16 @@ GenRescue::GenRescue()
   m_my_state.name = "Luke Skywalker";
 
   m_scout_name = "ben";
+
+  // Configuration defaults
+  m_own_speed_default = 1.5;
+  m_rival_default_speed = 1.5;
+  m_update_interval = 15.0;
+  m_max_rival_age = 30.0;
+
+  // Timing
+  m_last_plan_time = 0;
+  m_generate_path = true;
 }
 
 //---------------------------------------------------------
@@ -79,10 +87,12 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
     if (key == "NAV_X") // Checked OK
     {
       m_my_state.x = dval;
+      m_my_state.valid = true;
     }
     else if (key == "NAV_Y") // Checked OK
     {
       m_my_state.y = dval;
+      m_my_state.valid = true;
     }
     else if (key == "NAV_SPEED") // Checked OK
     {
@@ -213,11 +223,11 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
       rival.heading = hdg;
       rival.timestamp = MOOSTime();
       rival.valid = true;
-      rival.friendly = false;
+      rival.friendly = vname == m_scout_name ? true : false;
 
       // Check if rival exists, update if so, add if new
       bool found = false;
-      for (unsigned int i = 0; i < m_rivals.size(); ++i)
+      for (int i = 0; i < m_rivals.size(); ++i)
       {
         if (m_rivals[i].name == rival.name)
         {
@@ -276,21 +286,68 @@ bool GenRescue::Iterate()
     }
   }
 
-  // Regenerate path based on flag
-  if (m_generate_path)
+  // Calculate Target Weights based on TTT and Heading Intent
+  for (int i = 0; i < m_swimmers.size(); ++i)
   {
-    generatePath();
-    m_generate_path = false;
+    if (m_swimmers[i].rescued || m_swimmers[i].ignored)
+    {
+      m_swimmers[i].target_weight = -9999.0; // Sink completed/ignored swimmers to the bottom
+      continue;
+    }
+
+    // Calculate MY Time To Target & Heading Intent for Swimmer i
+    //
+    double dist_mine = hypot(m_my_state.x - m_swimmers[i].x, m_my_state.y - m_swimmers[i].y);
+    double ttt_mine = (m_my_state.speed > 0) ? dist_mine / m_my_state.speed : 9999.0;
+
+    double my_angle_to_swimmer = atan2(m_swimmers[i].y - m_my_state.y, m_swimmers[i].x - m_my_state.x) * (180.0 / M_PI);
+    double my_angle_diff = fabs(my_angle_to_swimmer - m_my_state.heading);
+    if (my_angle_diff > 180.0)
+      my_angle_diff = 360.0 - my_angle_diff;
+
+    // My base score: High if TTT is low. Penalized slightly if I have to turn around.
+    // heading_factor ranges from 1.0 (perfectly aligned) to 0.0 (pointed opposite way)
+    double my_heading_factor = 1.0 - (my_angle_diff / 180.0);
+    double my_base_score = (1000.0 / (ttt_mine + 1.0)) * (0.5 + 0.5 * my_heading_factor);
+
+    // Evaluate ALL Rivals to find the Maximum Threat
+    //
+    double max_rival_threat = 0.0;
+
+    for (int j = 0; j < m_rivals.size(); ++j)
+    {
+      double dist_rival = hypot(m_rivals[j].x - m_swimmers[i].x, m_rivals[j].y - m_swimmers[i].y);
+      double ttt_rival = (m_rivals[j].speed > 0) ? dist_rival / m_rivals[j].speed : 9999.0;
+
+      double rival_angle_to_swimmer = atan2(m_swimmers[i].y - m_rivals[j].y, m_swimmers[i].x - m_rivals[j].x) * (180.0 / M_PI);
+      double rival_angle_diff = fabs(rival_angle_to_swimmer - m_rivals[j].heading);
+      if (rival_angle_diff > 180.0)
+        rival_angle_diff = 360.0 - rival_angle_diff;
+
+      // Rival threat: High if TTT is low AND they are pointed directly at it
+      double rival_heading_factor = 1.0 - (rival_angle_diff / 180.0);
+      double current_rival_threat = (1000.0 / (ttt_rival + 1.0)) * rival_heading_factor;
+
+      // Keep the highest threat score among all rivals for this specific swimmer
+      if (current_rival_threat > max_rival_threat)
+      {
+        max_rival_threat = current_rival_threat;
+      }
+    }
+
+    // Final Combined Weight
+    m_swimmers[i].target_weight = my_base_score - max_rival_threat;
   }
 
-  // // Periodic adaptive re-planning based on rival positions
-  // double elapsed = MOOSTime() - m_last_predict_time;
-  // if (elapsed >= m_update_interval)
-  // {
-  //   m_last_predict_time = MOOSTime();
-  //   predictiveSweep();
-  //   m_path_generated = false;
-  // }
+  // Sort swimmers by target_weight in descending order (highest threat/priority first)
+  std::sort(m_swimmers.begin(), m_swimmers.end(),
+            [](const Swimmer &a, const Swimmer &b)
+            {
+              return a.target_weight > b.target_weight;
+            });
+
+  // Regenerate path based on flag
+  generatePath();
 
   AppCastingMOOSApp::PostReport();
   return (true);
@@ -421,197 +478,33 @@ bool GenRescue::buildReport()
   return (true);
 }
 
-// //------------------------------------------------------------
-// // Procedure: generatePath()
-// //            Uses a Self-Organizing Map (SOM) to solve the
-// //            Traveling Salesman Problem over active swimmers,
-// //            then publishes the resulting path via SURVEY_UPDATE.
+//------------------------------------------------------------
+// Procedure: generatePath()
+//            Builds a greedy nearest-neighbor tour over active
+//            (non-rescued, non-ignored) swimmers using the
+//            greedyPath() utility from lib_geometry, then
+//            publishes the path via SURVEY_UPDATE.
 
-// void GenRescue::generatePath()
-// {
-//   int n_cities = m_swimmers.size();
+void GenRescue::generatePath()
+{
+  // Collect active swimmer positions into an XYSegList
+  XYSegList segl;
+  for (int i = 0; i < m_swimmers.size(); i++)
+  {
+    if (!m_swimmers[i].rescued && !m_swimmers[i].ignored)
+    {
+      segl.add_vertex(m_swimmers[i].x, m_swimmers[i].y);
+    }
+  }
 
-//   // SOM Parameters
-//   int n_neurons = n_cities * 8;
-//   int max_iter = 50000;
-//   double learning_rate = 0.8;
-//   double radius = (double)n_neurons / 10.0;
+  if (segl.size() == 0)
+  {
+    reportEvent("generatePath: no active swimmers to visit");
+    return;
+  }
 
-//   // 1. Determine bounding box and center of all swimmer points
-//   double min_x = m_swimmers[0].x, max_x = m_swimmers[0].x;
-//   double min_y = m_swimmers[0].y, max_y = m_swimmers[0].y;
-//   for (int i = 1; i < n_cities; ++i)
-//   {
-//     if (m_swimmers[i].x < min_x)
-//       min_x = m_swimmers[i].x;
-//     if (m_swimmers[i].x > max_x)
-//       max_x = m_swimmers[i].x;
-//     if (m_swimmers[i].y < min_y)
-//       min_y = m_swimmers[i].y;
-//     if (m_swimmers[i].y > max_y)
-//       max_y = m_swimmers[i].y;
-//   }
+  // Start greedy tour from the vehicle's current position
+  XYSegList tour = greedyPath(segl, m_my_state.x, m_my_state.y);
 
-//   double center_x = (max_x + min_x) / 2.0;
-//   double center_y = (max_y + min_y) / 2.0;
-//   double circle_radius = std::max(max_x - min_x, max_y - min_y) / 2.0;
-//   if (circle_radius < 1.0)
-//     circle_radius = 10.0; // Avoid degenerate circle for co-located points
-
-//   struct Neuron
-//   {
-//     double x, y;
-//   };
-//   std::vector<Neuron> neurons(n_neurons);
-//   for (int i = 0; i < n_neurons; ++i)
-//   {
-//     double angle = 2.0 * M_PI * i / n_neurons;
-//     neurons[i].x = center_x + circle_radius * std::cos(angle);
-//     neurons[i].y = center_y + circle_radius * std::sin(angle);
-//   }
-
-//   // Setup RNG for picking random cities
-//   std::random_device rd;
-//   std::mt19937 gen(rd());
-//   std::uniform_int_distribution<> dist(0, n_cities - 1);
-
-//   // 2. Train the SOM
-//   for (int iter = 0; iter < max_iter; ++iter)
-//   {
-//     int city_idx = dist(gen);
-//     double cx = m_swimmers[city_idx].x;
-//     double cy = m_swimmers[city_idx].y;
-
-//     // Find the winning neuron (closest to the chosen city)
-//     int winner = 0;
-//     double min_dist = std::numeric_limits<double>::max();
-//     for (int i = 0; i < n_neurons; ++i)
-//     {
-//       double d = std::hypot(neurons[i].x - cx, neurons[i].y - cy);
-//       if (d < min_dist)
-//       {
-//         min_dist = d;
-//         winner = i;
-//       }
-//     }
-
-//     // Update the winning neuron and its neighbors
-//     for (int i = 0; i < n_neurons; ++i)
-//     {
-//       int dist_i = std::abs(i - winner);
-//       dist_i = std::min(dist_i, n_neurons - dist_i);
-
-//       double influence = std::exp(-(dist_i * dist_i) / (2.0 * radius * radius));
-
-//       neurons[i].x += learning_rate * influence * (cx - neurons[i].x);
-//       neurons[i].y += learning_rate * influence * (cy - neurons[i].y);
-//     }
-
-//     // Decay learning rate and radius
-//     learning_rate *= 0.99997;
-//     radius *= 0.99997;
-//   }
-
-//   // 3. Map swimmers to their closest winning neurons to extract the tour
-//   std::vector<std::pair<int, int>> mapped_cities(n_cities);
-//   for (int c = 0; c < n_cities; ++c)
-//   {
-//     int winner = 0;
-//     double min_dist = std::numeric_limits<double>::max();
-//     for (int n = 0; n < n_neurons; ++n)
-//     {
-//       double d = std::hypot(neurons[n].x - m_swimmers[c].x,
-//                             neurons[n].y - m_swimmers[c].y);
-//       if (d < min_dist)
-//       {
-//         min_dist = d;
-//         winner = n;
-//       }
-//     }
-//     mapped_cities[c] = {winner, c};
-//   }
-
-//   // Sort swimmers by their assigned neuron index to form the continuous path
-//   std::sort(mapped_cities.begin(), mapped_cities.end());
-
-//   // 4. Align the cyclic tour to start at the swimmer closest to our vehicle
-//   int start_idx = 0;
-//   double min_start_dist = std::numeric_limits<double>::max();
-//   for (int i = 0; i < n_cities; ++i)
-//   {
-//     int c_idx = mapped_cities[i].second;
-//     double d = std::hypot(m_swimmers[c_idx].x - m_pos_x,
-//                           m_swimmers[c_idx].y - m_pos_y);
-//     if (d < min_start_dist)
-//     {
-//       min_start_dist = d;
-//       start_idx = i;
-//     }
-//   }
-
-//   // 5. Construct the XYSegList and publish via SURVEY_UPDATE
-//   XYSegList path;
-//   path.add_vertex(m_pos_x, m_pos_y);
-
-//   for (int i = 0; i < n_cities; ++i)
-//   {
-//     int seq = (start_idx + i) % n_cities;
-//     int c_idx = mapped_cities[seq].second;
-//     path.add_vertex(m_swimmers[c_idx].x, m_swimmers[c_idx].y);
-//   }
-
-//   Notify("SURVEY_UPDATE", "points=" + path.get_spec());
-//   m_path_generated = true;
-
-//   reportEvent("Published SURVEY_UPDATE with " + uintToString(n_cities) + " swimmer waypoints");
-// }
-
-// //------------------------------------------------------------
-// // Procedure: predictiveSweep()
-// //            Periodically evaluates rival vehicle positions
-// //            and prunes swimmers that a rival can reach
-// //            before we would in our tour order.
-
-// bool GenRescue::predictiveSweep()
-// {
-//   double now = MOOSTime();
-
-//   for (map<string, Rival>::iterator rit = m_rivals.begin(); rit != m_rivals.end(); ++rit)
-//   {
-//     Rival &rival = rit->second;
-//     if (now - rival.timestamp > m_max_rival_age)
-//       continue;
-
-//     double opos_x = m_pos_x;
-//     double opos_y = m_pos_y;
-//     double own_ttt = 0.0;
-
-//     // C++11 lambda requires the explicit type (Swimmer), not 'auto'
-//     vector<Swimmer>::iterator remove_it = std::remove_if(
-//         m_swimmers.begin(),
-//         m_swimmers.end(),
-//         [&](const Swimmer &s)
-//         {
-//           // Our accumulated tour time
-//           own_ttt += hypot(s.x - opos_x, s.y - opos_y) / m_own_speed;
-//           opos_x = s.x;
-//           opos_y = s.y;
-
-//           // Rival's direct straight-line time
-//           double rival_ttt = hypot(s.x - rival.x, s.y - rival.y) / rival.spd;
-
-//           if (rival_ttt < own_ttt)
-//           {
-//             reportEvent("Dropping swimmer " + s.id);
-//             return true;
-//           }
-//           return false;
-//         });
-
-//     if (remove_it != m_swimmers.end())
-//     {
-//       m_swimmers.erase(remove_it, m_swimmers.end());
-//       m_path_generated = false;
-//     }
-//   }
-// }
+  Notify("SURVEY_UPDATE", "points=" + tour.get_spec());
+}
