@@ -35,9 +35,9 @@ GenRescue::GenRescue()
   m_my_state.timestamp = 0;
   m_my_state.valid = false;
   m_my_state.friendly = true;
-  m_my_state.name = "Luke Skywalker";
+  m_my_state.name = "luke";
 
-  m_scout_name = "reserved";
+  m_scout_name = "ben";
 }
 
 //---------------------------------------------------------
@@ -304,8 +304,6 @@ bool GenRescue::Iterate()
 
     for (int j = 0; j < m_rivals.size(); ++j)
     {
-      if (m_rivals[j].friendly)
-        continue;
 
       double dist_rival = hypot(m_rivals[j].x - m_swimmers[i].x, m_rivals[j].y - m_swimmers[i].y);
       double ttt_rival = (m_rivals[j].speed > 0) ? dist_rival / m_rivals[j].speed : 9999.0;
@@ -317,6 +315,10 @@ bool GenRescue::Iterate()
       // Rival threat: High if TTT is low AND they are pointed directly at it
       double rival_heading_factor = 1.0 - (rival_angle_diff / 180.0);
       double current_rival_threat = (1000.0 / (ttt_rival + 1.0)) * rival_heading_factor;
+
+      if (m_rivals[j].friendly)
+        current_rival_threat = 0.0; // Ignore friendly rivals
+      continue;
 
       // Keep the highest threat score among all rivals for this specific swimmer
       if (current_rival_threat > max_rival_threat)

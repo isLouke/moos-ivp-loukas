@@ -24,7 +24,9 @@
 #define BHV_SCOUT_HEADER
 
 #include <string>
+#include <vector>
 #include "IvPBehavior.h"
+#include "ZAIC_PEAK.h"
 #include "XYPoint.h"
 #include "XYPolygon.h"
 
@@ -38,27 +40,33 @@ public:
   IvPFunction* onRunState();
   void         onEveryState(std::string);
   
-protected:
-  IvPFunction* buildFunction();
+protected: // Local Utility functions
   void         updateScoutPoint();
   void         postViewPoint(bool viewable=true);
+  IvPFunction* buildFunction();
+  bool         getVerticalIntersections(double x, double& bottom_y, double& top_y);
+
+protected: // Configuration parameters
+  std::string m_tmate;
+  double      m_capture_radius;
+  double      m_desired_speed;
+  double      m_sensor_radius;
 
 protected: // State variables
-  double   m_osx;
-  double   m_osy;
-  double   m_curr_time;
-
-  double   m_ptx;
-  double   m_pty;
-  bool     m_pt_set;
-
-  XYPolygon m_rescue_region;
-
-protected: // Config variables
-  double m_capture_radius;
-  double m_desired_speed;
-
-  std::string m_tmate;
+  double      m_osx;
+  double      m_osy;
+  double      m_ptx;
+  double      m_pty;
+  bool        m_pt_set;
+  XYPolygon   m_rescue_region;
+  
+  double      m_current_x;
+  int         m_sweep_state;
+  double      m_lane_width;
+  bool        m_boustro_init;
+  double      m_min_dist;
+  
+  std::vector<XYPoint> m_known_swimmers;
 };
 
 #define IVP_EXPORT_FUNCTION
