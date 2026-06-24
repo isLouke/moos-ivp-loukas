@@ -37,6 +37,8 @@ GenRescue::GenRescue()
   m_my_state.valid = false;
   m_my_state.friendly = true;
   m_my_state.name = "Luke Skywalker";
+
+  m_scout_name = "ben";
 }
 
 //---------------------------------------------------------
@@ -195,13 +197,13 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
       string hdgstr = tokStringParse(sval, "HDG", ',', '=');
 
       // Skip own reports and malformed messages
-      if (vname == GetAppName() || xstr.empty() || ystr.empty())
+      if (vname.empty() || vname == GetAppName() || xstr.empty() || ystr.empty())
         continue;
 
       double x = stod(xstr);
       double y = stod(ystr);
-      double spd = stod(spdstr);
-      double hdg = stod(hdgstr);
+      double spd = spdstr.empty() ? 0.0 : stod(spdstr);
+      double hdg = hdgstr.empty() ? 0.0 : stod(hdgstr);
 
       State rival;
       rival.name = vname;
@@ -213,27 +215,22 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
       rival.valid = true;
       rival.friendly = false;
 
-      // Check if rival exists
-      if (m_rivals.empty())
+      // Check if rival exists, update if so, add if new
+      bool found = false;
+      for (unsigned int i = 0; i < m_rivals.size(); ++i)
       {
-        m_rivals.push_back(rival);
-      }
-      else
-      {
-        for (int i = 0; i < m_rivals.size(); ++i)
+        if (m_rivals[i].name == rival.name)
         {
-          if (m_rivals[i].name == rival.name)
-          {
-            m_rivals[i] = rival; // Update existing rival
-            break;
-          }
-          else if (i == m_rivals.size() - 1)
-          {
-            m_rivals.push_back(rival); // Add new rival
-            break;
-          }
+          m_rivals[i] = rival; // Update existing rival
+          found = true;
+          break;
         }
       }
+
+      if (!found)
+        m_rivals.push_back(rival);
+
+      reportEvent("Rival updated: " + vname + " x=" + doubleToString(x, 1) + " y=" + doubleToString(y, 1) + " spd=" + doubleToString(spd, 1));
     }
     else if (key != "APPCAST_REQ") // handled by AppCastingMOOSApp
       reportRunWarning("Unhandled Mail: " + key);
@@ -309,7 +306,6 @@ bool GenRescue::OnStartUp()
     string value = line;
 
     bool handled = false;
-
     if (param == "scout_name")
     {
       m_scout_name = value;
@@ -351,17 +347,64 @@ bool GenRescue::buildReport()
   m_msgs << "==============================================" << endl;
   m_msgs << "                 Configuration                " << endl;
   m_msgs << "==============================================" << endl;
+  m_msgs << "  scout_name: " << m_scout_name << endl;
+  m_msgs << endl;
 
   // Report My State
   m_msgs << "==============================================" << endl;
   m_msgs << "                   My State                   " << endl;
   m_msgs << "==============================================" << endl;
+  m_msgs << "  Name:    " << m_my_state.name << endl;
+  m_msgs << "  X:       " << doubleToString(m_my_state.x, 2) << endl;
+  m_msgs << "  Y:       " << doubleToString(m_my_state.y, 2) << endl;
+  m_msgs << "  Speed:   " << doubleToString(m_my_state.speed, 2) << endl;
+  m_msgs << "  Heading: " << doubleToString(m_my_state.heading, 2) << endl;
+  m_msgs << "  Valid:   " << (m_my_state.valid ? "yes" : "no") << endl;
+  m_msgs << endl;
 
-  // Report Vehicles
-  // #, Name, X, Y, Speed, Heading, Timestamp, Valid, Friendly
+  // Report Rivals
+  m_msgs << "==============================================" << endl;
+  m_msgs << "                    Others                    " << endl;
+  m_msgs << "==============================================" << endl;
 
-  // Report Swimmers (Table)
-  // id, X, Y, Rescued, Ignored, Finder
+  if (m_rivals.size() < 1)
+  {
+    m_msgs << "None" << endl;
+  }
+  else
+  {
+    for (int i = 0; i < m_rivals.size(); ++i)
+    {
+      m_msgs << intToString(i + 1) << ": " << m_rivals[i].name << ", X: " << doubleToString(m_rivals[i].x, 2) << ", Y: " << doubleToString(m_rivals[i].y, 2) << ", Speed: " << doubleToString(m_rivals[i].speed, 2) << ", Heading: " << doubleToString(m_rivals[i].heading, 2) << ", Friendly: " << (m_rivals[i].friendly ? "yes" : "no") << endl;
+    }
+  }
+  // Report Swimmers
+  m_msgs << "==============================================" << endl;
+  m_msgs << "                   Swimmers                   " << endl;
+  m_msgs << "==============================================" << endl;
+  if (m_swimmers.empty())
+  {
+    m_msgs << "  none" << endl;
+    m_msgs << endl;
+  }
+  else
+  {
+    ACTable actab(7);
+    actab << "id" << "X" << "Y" << "Rescued" << "Ignored"
+          << "Finder" << "Target Weight";
+    actab.addHeaderLines();
+    for (unsigned int i = 0; i < m_swimmers.size(); i++)
+    {
+      actab << intToString(m_swimmers[i].id)
+            << doubleToString(m_swimmers[i].x, 2)
+            << doubleToString(m_swimmers[i].y, 2)
+            << (m_swimmers[i].rescued ? "yes" : "no")
+            << (m_swimmers[i].ignored ? "yes" : "no")
+            << m_swimmers[i].finder
+            << doubleToString(m_swimmers[i].target_weight, 2);
+    }
+    m_msgs << actab.getFormattedString();
+  }
 
   return (true);
 }
