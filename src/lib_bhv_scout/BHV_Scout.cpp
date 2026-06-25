@@ -1,8 +1,8 @@
 /*****************************************************************/
-/*    NAME: M.Benjamin                                           */
+/*    NAME: George Chrysanidis                                   */
 /*    ORGN: Dept of Mechanical Eng / CSAIL, MIT Cambridge MA     */
 /*    FILE: BHV_Scout.cpp                                        */
-/*    DATE: April 30th 2022                                      */
+/*    DATE: June 24th, 2026                                      */
 /*****************************************************************/
 
 #include <cstdlib>
@@ -34,14 +34,10 @@ BHV_Scout::BHV_Scout(IvPDomain gdomain) :
   // All distances are in meters, all speed in meters per second
   // Default values for configuration parameters 
   m_desired_speed  = 1; 
-  m_capture_radius = 10;
+  m_capture_radius = 3.0;
 
   m_pt_set = false;
-  m_sensor_radius = 3.0; // Updated from 10 to 3 based on user feedback
-  m_current_x = 0;
-  m_sweep_state = 0;
-  m_lane_width = 8.0;
-  m_boustro_init = false;
+  m_grid_generated = false;
   m_min_dist = 999999;
   
   addInfoVars("NAV_X, NAV_Y");
@@ -66,6 +62,10 @@ bool BHV_Scout::setParam(string param, string val)
     handled = setPosDoubleOnString(m_desired_speed, val);
   else if(param == "tmate")
     handled = setNonWhiteVarOnString(m_tmate, val);
+  else if(param == "adv_scout")
+    handled = true; // Ignore but accept
+  else if(param == "adv_rescuer")
+    handled = true; // Ignore but accept
   else if(param == "sensor_radius")
     handled = setPosDoubleOnString(m_sensor_radius, val);
   else
@@ -96,13 +96,25 @@ void BHV_Scout::onEveryState(string str)
     bool ok_alert;
     vector<string> alerts = getBufferStringVector("SWIMMER_ALERT", ok_alert);
     for(unsigned int i=0; i<alerts.size(); i++) {
-      string alert = alerts[i];
-      string x_str = tokStringParse(alert, "X", ',', '=');
-      string y_str = tokStringParse(alert, "Y", ',', '=');
-      if (x_str != "" && y_str != "") {
-        double sx = atof(x_str.c_str());
-        double sy = atof(y_str.c_str());
-        
+      string val = alerts[i];
+      double sx = 0, sy = 0;
+      bool okx = false, oky = false;
+      
+      vector<string> svector = parseString(val, ',');
+      for (unsigned int j=0; j<svector.size(); j++) {
+        string param = stripBlankEnds(biteStringX(svector[j], '='));
+        string value = stripBlankEnds(svector[j]);
+        if (param == "x") {
+           sx = atof(value.c_str());
+           okx = true;
+        }
+        else if (param == "y") {
+           sy = atof(value.c_str());
+           oky = true;
+        }
+      }
+      
+      if (okx && oky) {
         // Add to known swimmers if not already there
         bool already_known = false;
         for (unsigned int j=0; j<m_known_swimmers.size(); j++) {
@@ -114,6 +126,14 @@ void BHV_Scout::onEveryState(string str)
         if (!already_known) {
           m_known_swimmers.push_back(XYPoint(sx, sy));
           m_pt_set = false; // Force replan so we don't try to drive over the newly discovered buoy
+          
+          // Update any existing cells immediately so they turn green
+          for (unsigned int k=0; k<m_cells.size(); k++) {
+             if (abs(sx - m_cells[k].x) <= 5.0 && abs(sy - m_cells[k].y) <= 5.0) {
+                m_cells[k].min_dist = 0.0;
+                m_cells[k].weight = 0.0;
+             }
+          }
         }
       }
     }
@@ -142,6 +162,71 @@ IvPFunction *BHV_Scout::onRunState()
     return(0);
   }
 
+  // Track all boats
+  vector<XYPoint> boats;
+  boats.push_back(XYPoint(m_osx, m_osy)); // scout itself
+  
+  if(getBufferVarUpdated("NODE_REPORT")) {
+    bool ok_rep;
+    vector<string> reports = getBufferStringVector("NODE_REPORT", ok_rep);
+    for(unsigned int i=0; i<reports.size(); i++) {
+      string report = reports[i];
+      string x_str = tokStringParse(report, "X", ',', '=');
+      string y_str = tokStringParse(report, "Y", ',', '=');
+      string type_str = tokStringParse(report, "TYPE", ',', '=');
+      
+      bool is_heron = false;
+      if (type_str == "heron" || type_str == "HERON" || type_str == "Heron") {
+          is_heron = true;
+      }
+      
+      if (is_heron) continue;
+
+      if (x_str != "" && y_str != "") {
+         double bx = atof(x_str.c_str());
+         double by = atof(y_str.c_str());
+         boats.push_back(XYPoint(bx, by));
+      }
+    }
+  }
+
+  // Update cell weights
+  for (unsigned int i=0; i<m_cells.size(); i++) {
+     for (auto& b : boats) {
+        double d = hypot(m_cells[i].x - b.x(), m_cells[i].y - b.y());
+        if (d < m_cells[i].min_dist) {
+           m_cells[i].min_dist = d;
+        }
+     }
+     
+     // Calculate new weight
+     if (m_cells[i].min_dist <= 5.0) {
+        m_cells[i].weight = 0.0;
+     } else if (m_cells[i].min_dist < 10.0) {
+        double w = (m_cells[i].min_dist - 5.0) / 5.0;
+        if (w < m_cells[i].weight) m_cells[i].weight = w;
+     }
+     
+     // Visualization update if weight changed
+     if (abs(m_cells[i].weight - m_cells[i].last_drawn_weight) > 0.05) {
+        m_cells[i].last_drawn_weight = m_cells[i].weight;
+        string color = "red";
+        if (m_cells[i].weight < 0.2) color = "green";
+        else if (m_cells[i].weight < 0.6) color = "yellow";
+        else if (m_cells[i].weight < 0.9) color = "orange";
+        
+        XYPolygon poly;
+        poly.add_vertex(m_cells[i].x - 5, m_cells[i].y - 5);
+        poly.add_vertex(m_cells[i].x + 5, m_cells[i].y - 5);
+        poly.add_vertex(m_cells[i].x + 5, m_cells[i].y + 5);
+        poly.add_vertex(m_cells[i].x - 5, m_cells[i].y + 5);
+        poly.set_label("cell_" + m_us_name + "_" + intToString(i));
+        poly.set_color("edge", "gray");
+        poly.set_color("fill", color);
+        postMessage("VIEW_POLYGON", poly.get_spec());
+     }
+  }
+
   // Part 2: Determine if the vehicle has reached the destination 
   // point and if so, declare completion.
   updateScoutPoint();
@@ -152,7 +237,7 @@ IvPFunction *BHV_Scout::onRunState()
   }
 
   bool point_reached = false;
-  if (dist <= m_capture_radius) { 
+  if (dist <= 3.0) { 
     point_reached = true;
   } else if (dist > m_min_dist + 3.0 && m_min_dist < 25.0) {
     // Slipped past it (missed by up to 25m, but distance is now increasing by 3m)
@@ -180,51 +265,20 @@ IvPFunction *BHV_Scout::onRunState()
 //-----------------------------------------------------------
 // Procedure: updateScoutPoint()
 
-bool BHV_Scout::getVerticalIntersections(double x, double& bottom_y, double& top_y)
-{
-  bottom_y = 999999;
-  top_y = -999999;
-  bool found = false;
-
-  unsigned int vsize = m_rescue_region.size();
-  for(unsigned int i=0; i<vsize; i++) {
-    unsigned int j = (i + 1) % vsize;
-    double x1 = m_rescue_region.get_vx(i);
-    double y1 = m_rescue_region.get_vy(i);
-    double x2 = m_rescue_region.get_vx(j);
-    double y2 = m_rescue_region.get_vy(j);
-
-    if ((x1 <= x && x2 >= x) || (x2 <= x && x1 >= x)) {
-      if (x1 != x2) {
-        double y_int = y1 + (y2 - y1) * (x - x1) / (x2 - x1);
-        if (y_int < bottom_y) bottom_y = y_int;
-        if (y_int > top_y) top_y = y_int;
-        found = true;
-      } else if (x1 == x) {
-        if (y1 < bottom_y) bottom_y = y1;
-        if (y1 > top_y) top_y = y1;
-        if (y2 < bottom_y) bottom_y = y2;
-        if (y2 > top_y) top_y = y2;
-        found = true;
-      }
-    }
-  }
-  
-  if (found) {
-    bottom_y += 5.0; // Inner buffer from absolute bottom
-    top_y -= 5.0;    // Inner buffer from absolute top
-    if (bottom_y > top_y) {
-      double mid = (bottom_y + top_y) / 2.0;
-      bottom_y = mid;
-      top_y = mid;
-    }
-  }
-  
-  return found;
-}
-
 void BHV_Scout::updateScoutPoint()
 {
+  if(m_pt_set) {
+    // Check if the current target cell has already been searched
+    for (unsigned int i=0; i<m_cells.size(); i++) {
+       if (m_cells[i].x == m_ptx && m_cells[i].y == m_pty) {
+          if (m_cells[i].weight == 0.0) {
+             m_pt_set = false; // Force repick
+          }
+          break;
+       }
+    }
+  }
+
   if(m_pt_set)
     return;
 
@@ -245,111 +299,110 @@ void BHV_Scout::updateScoutPoint()
 
   if (m_rescue_region.size() == 0) return;
 
-  if (!m_boustro_init) {
-    m_current_x = m_rescue_region.get_min_x() + 15.0;
-    m_sweep_state = 0; // 0: Top, 1: Bottom
-    m_lane_width = 8.0;
-    m_boustro_init = true;
+  if (!m_grid_generated) {
+    m_grid_generated = true;
+    m_cells.clear();
     
-    // Plot the full zig-zag pattern once
-    XYSegList pattern_seglist;
-    double sim_x = m_current_x;
-    int sim_state = m_sweep_state;
-    
-    while (true) {
-      double b_y = 0, t_y = 0;
-      bool intersects = getVerticalIntersections(sim_x, b_y, t_y);
-      if (!intersects || sim_x > m_rescue_region.get_max_x() - 15.0) {
-        break;
-      }
-      
-      double ty = (sim_state == 0 || sim_state == 3 || sim_state == 4) ? t_y : b_y;
-      pattern_seglist.add_vertex(sim_x, ty);
-      
-      if (sim_state == 0) {
-        sim_state = 1;
-      } else if (sim_state == 1) {
-        sim_state = 2;
-        sim_x += m_lane_width;
-      } else if (sim_state == 2) {
-        sim_state = 3;
-        sim_x += m_lane_width;
-      } else if (sim_state == 3) {
-        sim_state = 4;
-        sim_x += m_lane_width;
-      } else if (sim_state == 4) {
-        sim_state = 1;
-      }
+    // Seed points based on known swimmers (if any)
+    double seed_x = m_rescue_region.get_min_x();
+    double seed_y = m_rescue_region.get_min_y();
+    if (!m_known_swimmers.empty()) {
+      seed_x = m_known_swimmers[0].x();
+      seed_y = m_known_swimmers[0].y();
     }
     
-    pattern_seglist.set_label("scout_planned_pattern_" + m_us_name);
-    pattern_seglist.set_color("edge", "cyan");
-    pattern_seglist.set_color("vertex", "cyan");
-    pattern_seglist.set_edge_size(1);
-    pattern_seglist.set_vertex_size(2);
-    postMessage("VIEW_SEGLIST", pattern_seglist.get_spec());
+    // Grid alignment offsets
+    double off_x = fmod(seed_x, 10.0);
+    double off_y = fmod(seed_y, 10.0);
+    if (off_x < 0) off_x += 10.0;
+    if (off_y < 0) off_y += 10.0;
+
+    double min_x = m_rescue_region.get_min_x() - 10.0;
+    double max_x = m_rescue_region.get_max_x() + 10.0;
+    double min_y = m_rescue_region.get_min_y() - 10.0;
+    double max_y = m_rescue_region.get_max_y() + 10.0;
+    
+    for (double x = min_x; x <= max_x; x += 10.0) {
+      for (double y = min_y; y <= max_y; y += 10.0) {
+        // align
+        double cx = floor((x - off_x)/10.0)*10.0 + off_x;
+        double cy = floor((y - off_y)/10.0)*10.0 + off_y;
+        
+          if (m_rescue_region.contains(cx, cy)) {
+          // ensure no duplicates
+          bool duplicate = false;
+          for (auto& c : m_cells) {
+            if (hypot(c.x - cx, c.y - cy) < 1.0) duplicate = true;
+          }
+          
+          bool near_buoy = false;
+          double buoy_x[] = {-35.0, -62.5, -95.0};
+          double buoy_y[] = {-6.0, -17.9, -28.0};
+          for (int b=0; b<3; b++) {
+             if (abs(cx - buoy_x[b]) <= 5.0 && abs(cy - buoy_y[b]) <= 5.0) {
+                 near_buoy = true;
+                 break;
+             }
+          }
+          if (near_buoy) continue;
+
+          if (!duplicate) {
+             SearchCell cell;
+             cell.x = cx;
+             cell.y = cy;
+             cell.min_dist = 999999.0;
+             cell.weight = 1.0;
+             
+             for(auto& ks : m_known_swimmers) {
+                if (abs(ks.x() - cx) <= 5.0 && abs(ks.y() - cy) <= 5.0) {
+                   cell.min_dist = 0.0;
+                   cell.weight = 0.0;
+                }
+             }
+             
+             cell.last_drawn_weight = -1.0; // Force draw
+             m_cells.push_back(cell);
+          }
+        }
+      }
+    }
   }
 
-  bool found_point = false;
-  int attempts = 0;
+  // Path Planning: Find cell with highest weight, breaking ties by closest distance
+  double max_weight = -1.0;
+  double best_dist = 999999.0;
+  int best_index = -1;
   
-  while (!found_point && attempts < 8) {
-    double bottom_y = 0, top_y = 0;
-    
-    bool intersects = getVerticalIntersections(m_current_x, bottom_y, top_y);
-    
-    if (!intersects || m_current_x > m_rescue_region.get_max_x() - 15.0) {
-      // Reached far right of polygon. Reset to top-left.
-      m_current_x = m_rescue_region.get_min_x() + 15.0;
-      m_sweep_state = 0;
-      attempts++;
-      continue;
-    }
-
-    double tx = m_current_x, ty = 0;
-    if (m_sweep_state == 0 || m_sweep_state == 3 || m_sweep_state == 4) ty = top_y;
-    else ty = bottom_y;
-
-    bool valid = true;
-    for(unsigned int j=0; j<m_known_swimmers.size(); j++) {
-      if(hypot(tx - m_known_swimmers[j].x(), ty - m_known_swimmers[j].y()) <= 3.0) {
-        valid = false;
-        break;
-      }
-    }
-    
-    if (valid) {
-      m_ptx = tx;
-      m_pty = ty;
-      found_point = true;
-    }
-    
-    // Z-amboni State Machine
-    if (m_sweep_state == 0) {
-      m_sweep_state = 1;
-    } else if (m_sweep_state == 1) {
-      m_sweep_state = 2;
-      m_current_x += m_lane_width;
-    } else if (m_sweep_state == 2) {
-      m_sweep_state = 3;
-      m_current_x += m_lane_width;
-    } else if (m_sweep_state == 3) {
-      m_sweep_state = 4;
-      m_current_x += m_lane_width;
-    } else if (m_sweep_state == 4) {
-      m_sweep_state = 1;
-    }
-    
-    attempts++;
+  for (unsigned int i=0; i<m_cells.size(); i++) {
+     if (m_cells[i].weight > 0.0) {
+        double dist = hypot(m_cells[i].x - m_osx, m_cells[i].y - m_osy);
+        
+        if (m_cells[i].weight > max_weight + 0.01) {
+           max_weight = m_cells[i].weight;
+           best_dist = dist;
+           best_index = i;
+        } else if (abs(m_cells[i].weight - max_weight) <= 0.01) {
+           if (dist < best_dist) {
+              best_dist = dist;
+              best_index = i;
+           }
+        }
+     }
   }
-  if(!found_point) {
-    // Failsafe
-    randPointInPoly(m_rescue_region, m_ptx, m_pty);
+  
+  if (best_index != -1) {
+     m_ptx = m_cells[best_index].x;
+     m_pty = m_cells[best_index].y;
+     m_pt_set = true;
+     m_min_dist = 999999;
+     postViewPoint(true);
+  } else {
+     // No cells left to search, just hover or random point
+     randPointInPoly(m_rescue_region, m_ptx, m_pty);
+     m_pt_set = true;
+     m_min_dist = 999999;
+     postViewPoint(true);
   }
-  m_pt_set = true;
-  m_min_dist = 999999; // Reset slip capture distance for the new point
-
-  postViewPoint(true);
 }
 
 //-----------------------------------------------------------
@@ -392,6 +445,7 @@ IvPFunction *BHV_Scout::buildFunction()
   }
   
   double rel_ang_to_wpt = relAng(m_osx, m_osy, m_ptx, m_pty);
+
   ZAIC_PEAK crs_zaic(m_domain, "course");
   crs_zaic.setSummit(rel_ang_to_wpt);
   crs_zaic.setPeakWidth(0);

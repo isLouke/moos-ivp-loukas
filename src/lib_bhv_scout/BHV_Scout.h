@@ -1,8 +1,8 @@
 /*****************************************************************/
-/*    NAME: M.Benjamin,                                          */
+/*    NAME: George Chrysanidis,                                  */
 /*    ORGN: Dept of Mechanical Eng / CSAIL, MIT Cambridge MA     */
 /*    FILE: BHV_Scout.h                                          */
-/*    DATE: April 30th 2022                                      */
+/*    DATE: June 24th, 2026                                      */
 /*                                                               */
 /* This program is free software; you can redistribute it and/or */
 /* modify it under the terms of the GNU General Public License   */
@@ -29,6 +29,14 @@
 #include "ZAIC_PEAK.h"
 #include "XYPoint.h"
 #include "XYPolygon.h"
+
+struct SearchCell {
+  double x;
+  double y;
+  double min_dist;
+  double weight;
+  double last_drawn_weight;
+};
 
 class BHV_Scout : public IvPBehavior {
 public:
@@ -60,10 +68,8 @@ protected: // State variables
   bool        m_pt_set;
   XYPolygon   m_rescue_region;
   
-  double      m_current_x;
-  int         m_sweep_state;
-  double      m_lane_width;
-  bool        m_boustro_init;
+  bool        m_grid_generated;
+  std::vector<SearchCell> m_cells;
   double      m_min_dist;
   
   std::vector<XYPoint> m_known_swimmers;
