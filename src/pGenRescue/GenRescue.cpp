@@ -124,6 +124,55 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
     else if (key == "SCOUTED_SWIMMER")
     {
       // Format: id=18, x=-150, y=-50
+      string id = tokStringParse(sval, "id", ',', '=');
+      string xpos = tokStringParse(sval, "x", ',', '=');
+      string ypos = tokStringParse(sval, "y", ',', '=');
+      // Validate the parsed values
+
+      if (id.empty() || xpos.empty() || ypos.empty())
+      {
+        reportRunWarning("Malformed SWIMMER_ALERT: " + sval);
+        continue;
+      }
+
+      Swimmer s;
+      s.id = stoi(id);
+      s.x = stod(xpos);
+      s.y = stod(ypos);
+      s.rescued = false;
+      s.ignored = false;
+      s.target_weight = 1.0; // Default weight
+
+      // Add the first swimmer
+      // RUNS ONLY ONCE TO POPULATE THE SWIMMER LIST.
+      if (m_swimmers.empty())
+      {
+        m_swimmers.push_back(s);
+      }
+
+      // 1.   Check if the swimmer is already in the list.
+      // 1.1    If not add him.
+      // 1.2    If he exists
+      // 2.   Additional Check will be implemented in Iterate()
+
+      if (!m_swimmers.empty()) // Add if statement for clarity, it is not needed
+      {
+        bool found = false;
+        for (int i = 0; i < m_swimmers.size(); ++i) // Loop the swimmer list
+        {
+          // Check if the swimmer exists
+          if (m_swimmers[i].id == s.id)
+          {
+            found = true;
+          }
+        }
+
+        if (!found)
+        {
+          m_swimmers.push_back(s);
+          reportEvent("New swimmer alert: id=" + id + ", x=" + xpos + ", y=" + ypos);
+        }
+      }
     }
     else if (key == "SWIMMER_ALERT")
     {
