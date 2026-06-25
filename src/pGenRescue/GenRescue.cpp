@@ -36,8 +36,6 @@ GenRescue::GenRescue()
   m_my_state.valid = false;
   m_my_state.friendly = true;
   m_my_state.name = "luke";
-
-  m_scout_name = "ben";
 }
 
 //---------------------------------------------------------
@@ -194,6 +192,7 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
       string ystr = tokStringParse(sval, "Y", ',', '=');
       string spdstr = tokStringParse(sval, "SPD", ',', '=');
       string hdgstr = tokStringParse(sval, "HDG", ',', '=');
+      string typestr = tokStringParse(sval, "TYPE", ',', '=');
 
       // Skip own reports and malformed messages
       if (vname.empty() || vname == GetAppName() || xstr.empty() || ystr.empty())
@@ -212,7 +211,7 @@ bool GenRescue::OnNewMail(MOOSMSG_LIST &NewMail)
       rival.heading = hdg;
       rival.timestamp = MOOSTime();
       rival.valid = true;
-      rival.friendly = vname == m_scout_name ? true : false;
+      rival.friendly = (typestr == "heron") ? true : false;
 
       // Check if rival exists, update if so, add if new
       bool found = false;
@@ -441,6 +440,7 @@ bool GenRescue::buildReport()
       m_msgs << "  Speed:    " << doubleToString(m_rivals[i].speed, 2) << endl;
       m_msgs << "  Heading:  " << doubleToString(m_rivals[i].heading, 2) << endl;
       m_msgs << "  Friendly: " << (m_rivals[i].friendly ? "yes" : "no") << endl;
+      m_msgs << "-------------------------------------" << endl;
     }
   }
   // Report Swimmers

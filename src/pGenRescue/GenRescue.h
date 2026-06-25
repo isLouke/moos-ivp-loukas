@@ -69,6 +69,7 @@ private: // State variables
   std::vector<State> m_rivals;
 
   std::string m_scout_name;
+  std::string m_scout_rival;
 
   XYPolygon m_rescue_region;
 };
